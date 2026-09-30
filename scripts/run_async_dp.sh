@@ -35,6 +35,12 @@ export TRL_EXPERIMENTAL_SILENCE="${TRL_EXPERIMENTAL_SILENCE:-1}"
 mkdir -p "$TMPDIR"
 
 DTYPE="${DTYPE:-none}"
+# Trainer precision recipe (see docs/PRECISION.md):
+#   DTYPE=none    + MIXED_PRECISION=no   -> pure fp32 (arm-A style; slowest, safest)
+#   DTYPE=bfloat16+ MIXED_PRECISION=no   -> pure bf16 (fast; tiny updates can vanish)
+#   DTYPE=none    + MIXED_PRECISION=bf16 -> fp32 master weights + bf16 autocast compute
+#     (the recipe for low-precision work: small lr updates land on fp32 masters)
+MIXED_PRECISION="${MIXED_PRECISION:-no}"
 GSPO="${GSPO:-1}"
 GSPO_NORM="${GSPO_NORM:-seq_mean}"
 GSPO_EPS_LOW="${GSPO_EPS_LOW:-3e-4}"
@@ -87,11 +93,14 @@ echo "[dp] epochs=$EPOCHS max_steps=${MAX_STEPS:-0} save_steps=${SAVE:-50} reque
 # ~900 sequences run concurrently, but CUDA graphs are only captured up to
 # max_cudagraph_capture_size (stock 512) and max_num_batched_tokens defaults to
 # 8192, so big-batch steps fall back to eager execution.
-VLLM_EXTRA=""
+# KV cache: KV_DTYPE=fp8 halves KV memory on Hopper/Blackwell (more concurrent
+# sequences); GPU_MEM_UTIL caps the rollout server's VRAM share.
+VLLM_EXTRA="${VLLM_EXTRA:-}"
 [ -n "${MAX_SEQS:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-num-seqs $MAX_SEQS"
 [ -n "${MAX_BATCHED:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-num-batched-tokens $MAX_BATCHED"
 [ -n "${MAX_CG:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-cudagraph-capture-size $MAX_CG"
 [ "${ASYNC_SCHED:-0}" = "1" ] && VLLM_EXTRA="$VLLM_EXTRA --async-scheduling"
+[ -n "${KV_DTYPE:-}" ] && [ "$KV_DTYPE" != "auto" ] && VLLM_EXTRA="$VLLM_EXTRA --kv-cache-dtype $KV_DTYPE"
 echo "[dp] vllm extra:${VLLM_EXTRA:- (stock)}"
 
 # ---- run manifest + code snapshot (contract A/H): written BEFORE anything starts, so a
@@ -203,8 +212,15 @@ if ! curl -sf "localhost:$PORT/health" > /dev/null; then
 fi
 
 set +e
-CUDA_VISIBLE_DEVICES=$TRAINER_GPUS accelerate launch \
-    --num_processes "$NUM_TRAINER" --mixed_precision no --dynamo_backend no \
+# REPORT_TO: HF tracker integrations (tensorboard / wandb / mlflow / swanlab...).
+# ACCELERATE_CONFIG: when set, replaces the inline accelerate flags entirely (e.g.
+# an FSDP config from examples/accelerate/).
+if [ -n "${ACCELERATE_CONFIG:-}" ]; then
+  ACC_LAUNCH=(accelerate launch --config_file "$ACCELERATE_CONFIG" --num_processes "$NUM_TRAINER")
+else
+  ACC_LAUNCH=(accelerate launch --num_processes "$NUM_TRAINER" --mixed_precision "$MIXED_PRECISION" --dynamo_backend no)
+fi
+CUDA_VISIBLE_DEVICES=$TRAINER_GPUS "${ACC_LAUNCH[@]}" \
     -m rlforge.trainer \
   --model "$MODEL" \
   --train "$DATA" \
@@ -217,6 +233,7 @@ CUDA_VISIBLE_DEVICES=$TRAINER_GPUS accelerate launch \
   --save-steps "$SAVE" \
   --max-staleness "$STALE" \
   --max-inflight-tasks "$INFLIGHT" \
+  --report-to "${REPORT_TO:-none}" \
   $EXTRA_ARGS \
   2>&1 | tee "logs/trainer_dp${SUFFIX}.log"
 TRAINER_RC=${PIPESTATUS[0]}

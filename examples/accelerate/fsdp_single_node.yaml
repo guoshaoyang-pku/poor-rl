@@ -1,0 +1,40 @@
+# Accelerate config: single-node FSDP (full shard) with bf16 mixed precision.
+#
+# When to use: full-parameter training of models that no longer fit comfortably
+# as one copy per GPU (roughly >=3B on 140G cards, smaller on 40-80G cards).
+# At 0.8B the plain DDP launcher path is faster -- FSDP adds all-gather overhead
+# per forward.
+#
+# fp32 master weights: FSDP keeps params in fp32 and casts to bf16 for compute
+# (mixed_precision: bf16 below), which is the low-precision recipe from
+# docs/PRECISION.md.
+#
+# Usage: ACCELERATE_CONFIG=examples/accelerate/fsdp_single_node.yaml \
+#        bash scripts/run_async_dp.sh full _fsdp
+compute_environment: LOCAL_MACHINE
+debug: false
+distributed_type: FSDP
+downcast_bf16: "no"
+enable_cpu_affinity: false
+fsdp_config:
+  fsdp_activation_checkpointing: true
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_backward_prefetch: BACKWARD_PRE
+  fsdp_cpu_ram_efficient_loading: true
+  fsdp_forward_prefetch: false
+  fsdp_offload_params: false
+  fsdp_reshard_after_forward: true
+  fsdp_state_dict_type: SHARDED_STATE_DICT
+  fsdp_sync_module_states: true
+  fsdp_use_orig_params: true
+machine_rank: 0
+main_training_function: main
+mixed_precision: bf16
+num_machines: 1
+num_processes: 4
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false

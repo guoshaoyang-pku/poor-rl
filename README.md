@@ -1,13 +1,30 @@
 # rlforge
 
-Async **GSPO/GRPO** RL post-training for generative models (LLM/VLM), built on
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
+![Scope](https://img.shields.io/badge/scope-single--node%20%C2%B7%20small%20models-green)
+
+Async **GSPO/GRPO** RL post-training for small generative models (LLM/VLM), built on
 [TRL](https://github.com/huggingface/trl)'s experimental `AsyncGRPOTrainer` + a
 vLLM rollout server — plus the guardrails you need to run experiments unattended
 on a single GPU node, fully offline.
 
-Developed and validated on an 8xH200 node training a 0.8B model for 1500 steps:
-held-out accuracy 0.11 (base) -> 0.81, with every failure mode below hit (and
-fixed) in production first.
+**Niche: small models, one machine, well optimized.** Developed and validated on an
+8xH200 node training a 0.8B model for 1500 steps: held-out accuracy 0.11 (base) →
+0.81, with every failure mode listed below hit (and fixed) in production first.
+
+## Contents
+
+- [Why not just TRL / verl?](#why-not-just-trl--verl)
+- [Install](#install)
+- [Quickstart](#quickstart-single-node-8-gpus)
+- [Custom rewards](#custom-rewards)
+- [The GSPO contract](#the-gspo-contract-what-we-got-wrong-before-you)
+- [Precision recipes](#precision-recipes)
+- [The RL panel](#the-rl-panel)
+- [Pitfalls this framework guards against](#pitfalls-this-framework-guards-against)
+- [Repo layout](#repo-layout)
+- [Docs](#docs)
 
 ## Why not just TRL / verl?
 
@@ -17,11 +34,11 @@ fixed) in production first.
 | Async rollout (staleness) | yes, static GPU split (e.g. 4+4) | yes (experimental) | colocate or separate_async |
 | Reward truncation signal | length-aware (`-2` on cap hit) | n/a | reward managers don't pass lengths by default |
 | Unattended runs | watchdog (5 stop rules) + in-loop held-out eval + keep-best | no | no |
-| Offline auto-report | self-contained HTML + metrics.json every N min | wandb (needs net) | wandb |
-| Scale | single node, full-DP, ~0.5-3B | single/multi node | multi-node, FSDP, 8B-70B+ |
+| Offline RL panel | TensorBoard + self-contained HTML report | wandb (needs net) | wandb |
+| Scale | single node, full-DP, ~0.5–3B (FSDP config for beyond) | single/multi node | multi-node, FSDP, 8B–70B+ |
 
 Scope: RL post-training of generative models at single-node scale. For classic
-control (DQN etc.) use Stable-Baselines3/CleanRL; for >=8B or multi-node use verl.
+control (DQN etc.) use Stable-Baselines3/CleanRL; for ≥8B or multi-node use verl.
 
 ## Install
 
@@ -40,6 +57,7 @@ export RLFORGE_BASE_MODEL=$MODEL
 # train.jsonl rows: {"prompt": [...chat...] or "...", "answer": "C" | "A<B<C<D<E", "source": "..."}
 ROOT=$ROOT VENV=$VENV MODEL=$MODEL \
 GSPO=1 GSPO_EPS_LOW=0.007 GSPO_EPS_HIGH=0.008 MAX_STEPS=1500 \
+REPORT_TO=tensorboard \
 bash scripts/run_async_dp.sh full _run1 &
 
 # watchdog: in-loop held-out eval + keep-best + auto-stop
@@ -47,7 +65,10 @@ python -m rlforge.watchdog --run $ROOT/runs/async_dp_run1 \
     --trainer-log $ROOT/logs/trainer_dp_run1.log --launcher-pid $! \
     --eval-gpu 7 --eval-data data/eval.jsonl &
 
-# auto-report (local wandb): refreshes report.html + metrics.json every 10 min
+# panel 1 (generic): TensorBoard over all runs
+ROOT=$ROOT bash scripts/panel.sh          # http://localhost:6006
+
+# panel 2 (RL-specific): auto HTML report every 10 min
 python -m rlforge.report --run $ROOT/runs/async_dp_run1 \
     --trainer-log $ROOT/logs/trainer_dp_run1.log \
     --eval-history $ROOT/evals/async_dp_run1/history.jsonl \
@@ -62,10 +83,13 @@ Any `module:function` with the TRL signature works:
 python -m rlforge.trainer --reward my_project.rewards:my_fn ...
 ```
 
-The built-in grader (`rlforge.rewards.mcq`) scores MCQ letters and 5-choice
-ranking chains, and writes per-task / per-source reward/accuracy/truncation
-counters to `$RLFORGE_TASK_LOG` (the report turns them into curves). Eval and
-training import the same grader code, so numbers are comparable by construction.
+See [`examples/custom_reward/arith.py`](examples/custom_reward/arith.py) for a
+minimal annotated example (truncation detection, task-log counters, dataset-column
+pass-through). The built-in grader (`rlforge.rewards.mcq`) scores MCQ letters and
+5-choice ranking chains, and writes per-task / per-source reward/accuracy/
+truncation counters to `$RLFORGE_TASK_LOG` — the report turns them into curves.
+Eval and training import the same grader code, so numbers are comparable by
+construction.
 
 ## The GSPO contract (what we got wrong before you)
 
@@ -77,8 +101,8 @@ training import the same grader code, so numbers are comparable by construction.
 - **Token-level clip values are a no-op at sequence level.** eps=0.2/0.28 never
   engages on a per-sequence ratio. The paper's 3e-4/4e-4 is right for on-policy;
   with staleness >1, calibrate empirically (we run 0.007/0.008 at staleness 3)
-  and watch `gspo/seq_clip_low_frac` — sustained >=0.5 is the collapse signature.
-- **Off-policy depth pushes rho below 1 systematically.** With staleness>=2 the
+  and watch `gspo/seq_clip_low_frac` — sustained ≥0.5 is the collapse signature.
+- **Off-policy depth pushes ρ below 1 systematically.** With staleness ≥2 the
   low-side clip does real work; that's the safe direction, but read it together
   with the held-out curve, not alone.
 
@@ -86,20 +110,35 @@ training import the same grader code, so numbers are comparable by construction.
 engagement, gradient direction, and zero-gradient-outside-clip, against a naive
 reference implementation.
 
+## Precision recipes
+
+RL updates are tiny; in pure bf16 they can be rounded away entirely. The launcher
+exposes both knobs (`DTYPE` × `MIXED_PRECISION`); for low-precision work use
+**fp32 master weights + bf16 compute** (`DTYPE=none MIXED_PRECISION=bf16`).
+Full rationale and verification procedure: [`docs/PRECISION.md`](docs/PRECISION.md).
+
+## The RL panel
+
+Two offline views: TensorBoard (`REPORT_TO=tensorboard` + `scripts/panel.sh`,
+zero custom code — wandb/mlflow/swanlab work through the same flag) and the
+built-in HTML report for RL-specific curves a generic tracker can't compute
+(per-task reward vs accuracy vs truncation, held-out ladder, GSPO health).
+Details: [`docs/PANEL.md`](docs/PANEL.md).
+
 ## Pitfalls this framework guards against
 
-1. **TRL's 120s request timeout** kills slow-but-fine long completions forever ->
+1. **TRL's 120s request timeout** kills slow-but-fine long completions forever →
    set `--request-timeout` for the worst case (we use 3600).
 2. **Reward parsers that test one separator** (`">" in gold`) silently mis-score
-   every ranking answer when the key format changes -> shape-based detection.
-3. **Truncated completions scored as "unparseable"** -> the reward sees token
+   every ranking answer when the key format changes → shape-based detection.
+3. **Truncated completions scored as "unparseable"** → the reward sees token
    counts, and `-2` actually fires.
-4. **Eval numbers without generation conditions** -> the eval report records
+4. **Eval numbers without generation conditions** → the eval report records
    decoding params, truncation rate, per-task breakdown and a constant baseline.
-5. **save_total_limit deleting your peak** -> watchdog copies the best
-   checkpoint to `keep_best/` the moment a new best eval lands.
-6. **Missing tokenizer files in checkpoints** -> the evaluator builds a shim
-   from the base model (never weights).
+5. **save_total_limit deleting your peak** → watchdog copies the best checkpoint
+   to `keep_best/` the moment a new best eval lands.
+6. **Missing tokenizer files in checkpoints** → the evaluator builds a shim from
+   the base model (never weights).
 
 ## Repo layout
 
@@ -109,11 +148,24 @@ src/rlforge/gspo.py       naive reference math for the GSPO loss
 src/rlforge/rewards/      reward protocol + built-in MCQ/ranking grader
 src/rlforge/eval_mcq.py   held-out evaluator (vLLM), shared scoring path
 src/rlforge/watchdog.py   in-loop eval / keep-best / auto-stop
-src/rlforge/report.py     auto HTML report (local wandb substitute)
+src/rlforge/report.py     auto HTML report (RL-specific panel)
 scripts/run_async_dp.sh   single-node launcher (vLLM server + DP trainer)
+scripts/panel.sh          TensorBoard over all runs
 tests/                    GSPO core math + reward/parser tests
 examples/aiq_mcq/         data format + a runnable example config
+examples/custom_reward/   minimal annotated custom reward
+examples/accelerate/      FSDP single-node config (for >3B full-parameter)
+docs/                     ROADMAP / PRECISION / PANEL / COMPATIBILITY
 ```
+
+## Docs
+
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — where this is going (low-precision,
+  KV cache, FSDP, VLA) and what is explicitly out of scope.
+- [`docs/PRECISION.md`](docs/PRECISION.md) — bf16/fp32-master recipes, fp8 path.
+- [`docs/PANEL.md`](docs/PANEL.md) — the wandb-style panel, offline.
+- [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) — backbone checklist and notes
+  for plugging in external small-RL projects (incl. Qwen3.5-0.8B game-RL arms).
 
 ## Citation
 

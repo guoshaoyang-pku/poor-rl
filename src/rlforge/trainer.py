@@ -288,6 +288,12 @@ def main():
     ap.add_argument("--no-thinking", action="store_true",
                     help="do not pass enable_thinking=True to the chat template "
                          "(Qwen-family templates only; omit for other models)")
+    ap.add_argument("--report-to", default="none",
+                    help="comma-separated HF integrations: tensorboard, wandb, mlflow, "
+                         "swanlab... ('none' disables). The run's own JSONL/HTML panel "
+                         "(rlforge.report) is independent of this.")
+    ap.add_argument("--run-name", default=None,
+                    help="run name for the tracker integrations (default: run dir name)")
     args = ap.parse_args()
 
     rows = [json.loads(line) for line in open(args.train)]
@@ -295,6 +301,8 @@ def main():
 
     pdb = args.num_generations  # one full group per micro-batch
     gas = max(1, args.completions_per_step // pdb)
+
+    report_to = [] if args.report_to in ("none", "") else args.report_to.split(",")
 
     cfg_kwargs = dict(
         output_dir=args.out,
@@ -322,7 +330,9 @@ def main():
         save_steps=args.save_steps,
         save_total_limit=5,
         save_only_model=True,
-        report_to=[],
+        report_to=report_to,
+        logging_dir=args.out + "/tb",
+        run_name=args.run_name or args.out.rstrip("/").rsplit("/", 1)[-1],
         log_completions=False,
         seed=0,
         request_timeout=args.request_timeout,
