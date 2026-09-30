@@ -1,0 +1,12 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+# run artifacts
+runs/
+logs/
+evals/
+data/
+tmp/
+_shims/

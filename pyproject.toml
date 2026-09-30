@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rlforge"
+version = "0.1.0"
+description = "Async GSPO/GRPO RL post-training for generative models (TRL + vLLM), with watchdog, in-loop eval and auto-report"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Shaoyang Guo" }]
+dependencies = [
+    "torch>=2.4",
+    "trl>=1.14",
+    "vllm>=0.10",
+    "transformers>=4.50",
+    "datasets>=3.0",
+    "accelerate>=1.0",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

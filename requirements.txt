@@ -1,0 +1,10 @@
+# Tested combination (single-node 8xH200, 0.8B model, 2026-09):
+# torch 2.13.0+cu130 / trl 1.14.0 / vllm 0.30.0 / transformers 5.17.0 / accelerate / datasets
+torch>=2.4
+trl>=1.14
+vllm>=0.10
+transformers>=4.50
+datasets>=3.0
+accelerate>=1.0
+matplotlib>=3.8
+pytest>=8
