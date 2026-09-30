@@ -118,10 +118,21 @@ def main():
     ap.add_argument("--disk-min-gb", type=float, default=50)
     ap.add_argument("--wall-hours", type=float, default=10.5)
     ap.add_argument("--eval-script", default=str(Path(__file__).parent / "eval_mcq.py"))
+    ap.add_argument("--eval-mode", choices=["spawn", "server"], default="spawn",
+                    help="spawn: boot a per-checkpoint vLLM on --eval-gpu (exact ckpt, "
+                         "slow). server: probe the live rollout server via "
+                         "--eval-server-url (fast, no extra GPU, but scores the live "
+                         "policy which may be a few steps past the checkpoint).")
+    ap.add_argument("--eval-server-url", default="http://localhost:8000")
+    ap.add_argument("--eval-server-model", default=None,
+                    help="served model name for eval-mode=server (default: $MODEL)")
     ap.add_argument("--eval-gpu-frac", type=float, default=0.45,
                     help="vLLM memory fraction for eval; the eval GPU also hosts a "
                          "trainer rank (~25 GB), so the eval cannot take 0.9")
     args = ap.parse_args()
+    if args.eval_server_model is None:
+        import os as _os
+        args.eval_server_model = _os.environ.get("MODEL") or _os.environ.get("RLFORGE_BASE_MODEL", "")
 
     run = args.run
     root = run.parent.parent
@@ -197,6 +208,13 @@ def main():
                 "--out", str(out),
             ]
             env = dict(os.environ, CUDA_VISIBLE_DEVICES=args.eval_gpu)
+            if args.eval_mode == "server":
+                # Probe the LIVE policy on the rollout server: no second vLLM boot,
+                # no trainer-GPU contention -- but scores the weights the server
+                # holds at eval time, which may be a few steps past this checkpoint.
+                cmd[cmd.index(str(path))] = args.eval_server_model
+                cmd += ["--server-url", args.eval_server_url]
+                env.pop("CUDA_VISIBLE_DEVICES")
             print(f"[watchdog] eval ckpt {n} (step {step}) ...", flush=True)
             t_eval = time.time()
             proc = subprocess.run(cmd, env=env, capture_output=True, text=True)

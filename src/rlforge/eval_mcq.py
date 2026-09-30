@@ -148,6 +148,38 @@ def constant_baseline(rows):
     return out
 
 
+def _eval_via_server(rows, args):
+    """Chat-completions against a live vLLM server. Returns the same normalized
+    shape as the offline path: [[(text, n_tokens), ...], ...] per row."""
+    import concurrent.futures as cf
+    import urllib.request
+
+    url = args.server_url.rstrip("/") + "/v1/chat/completions"
+
+    def one(row):
+        body = json.dumps({
+            "model": args.model,
+            "messages": row["prompt"] if isinstance(row["prompt"], list)
+                        else [{"role": "user", "content": str(row["prompt"])}],
+            "temperature": args.temperature,
+            "top_p": args.top_p,
+            "max_tokens": args.max_tokens,
+            "n": args.n_samples,
+            "seed": 0,
+        }).encode()
+        req = urllib.request.Request(url, data=body,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=max(3600, args.max_tokens)) as resp:
+            d = json.loads(resp.read())
+        return [(c["message"]["content"],
+                 d["usage"]["completion_tokens"] // max(1, len(d["choices"]))
+                 if c.get("finish_reason") != "length" else args.max_tokens)
+                for c in d["choices"]]
+
+    with cf.ThreadPoolExecutor(max_workers=args.concurrency) as ex:
+        return list(ex.map(one, rows))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
@@ -160,39 +192,49 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--n-samples", type=int, default=1,
                     help="samples per question (paired stats need >= 2)")
+    ap.add_argument("--server-url", default=None,
+                    help="eval through a live OpenAI-compatible vLLM server (e.g. "
+                         "http://localhost:8000) instead of booting an offline LLM. "
+                         "--model is then the served model name. Scores the policy "
+                         "the server currently holds, not a fixed checkpoint.")
+    ap.add_argument("--concurrency", type=int, default=64,
+                    help="max in-flight requests in --server-url mode")
     args = ap.parse_args()
 
     rows = [json.loads(line) for line in open(args.data)]
     if args.limit:
         rows = rows[: args.limit]
-    from vllm import LLM, SamplingParams
 
-    load_path = build_shim(args.model)
-    llm = LLM(
-        model=load_path,
-        gpu_memory_utilization=args.gpu_frac,
-        max_model_len=24576,
-        enable_prefix_caching=True,
-    )
-    sp = SamplingParams(
-        temperature=args.temperature,
-        top_p=args.top_p,
-        max_tokens=args.max_tokens,
-        seed=0,
-        n=args.n_samples,
-    )
-    outs = llm.chat(
-        [r["prompt"] for r in rows], sp, chat_template_kwargs={"enable_thinking": True}
-    )
+    if args.server_url:
+        outs = _eval_via_server(rows, args)
+    else:
+        from vllm import LLM, SamplingParams
+
+        load_path = build_shim(args.model)
+        llm = LLM(
+            model=load_path,
+            gpu_memory_utilization=args.gpu_frac,
+            max_model_len=24576,
+            enable_prefix_caching=True,
+        )
+        sp = SamplingParams(
+            temperature=args.temperature,
+            top_p=args.top_p,
+            max_tokens=args.max_tokens,
+            seed=0,
+            n=args.n_samples,
+        )
+        chat_outs = llm.chat(
+            [r["prompt"] for r in rows], sp, chat_template_kwargs={"enable_thinking": True}
+        )
+        outs = [[(c.text, len(c.token_ids)) for c in o.outputs] for o in chat_outs]
 
     recs = []
     for r, o in zip(rows, outs):
         gold = r["answer"].strip()
         ranking = is_ranking_gold(gold)
         samples = []
-        for cand in o.outputs:
-            text = cand.text
-            n_tok = len(cand.token_ids)
+        for text, n_tok in o:
             truncated = n_tok >= args.max_tokens
             if ranking:
                 pred_letters = parse_order(text)

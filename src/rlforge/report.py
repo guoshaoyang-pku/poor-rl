@@ -318,6 +318,8 @@ def build(args):
     tasks = parse_task_split(run / "task_split.jsonl") if (run / "task_split.jsonl").exists() else []
     evals = parse_eval_history(Path(args.eval_history)) if args.eval_history and Path(args.eval_history).exists() else []
     base = json.load(open(args.base_eval)) if args.base_eval and Path(args.base_eval).exists() else None
+    if base and "overall" not in base and "summary" in base:
+        base = base["summary"]  # eval_mcq --out wraps results as {"summary": ..., "records": ...}
     manifest = json.load(open(args.pool_manifest)) if args.pool_manifest and Path(args.pool_manifest).exists() else None
     run_meta = json.load(open(run / "run.json")) if (run / "run.json").exists() else None
     out = Path(args.out)

@@ -242,6 +242,52 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         return loss
 
 
+def _apply_liger_base_kernels(model_path: str) -> None:
+    """Monkey-patch base kernels (RMSNorm/RoPE/SwiGLU) onto the model class.
+
+    TRL's async trainer hard-blocks `use_liger_kernel` (NotImplementedError) and its
+    fused-linear-CE would bypass the per-token logprob computation GRPO needs, so we
+    apply only the elementwise kernels. Dispatch by config model_type.
+    """
+    from transformers import AutoConfig
+
+    model_type = AutoConfig.from_pretrained(model_path).model_type
+    patches = {
+        "qwen2": "apply_liger_kernel_to_qwen2",
+        "qwen3": "apply_liger_kernel_to_qwen3",
+        "qwen3_moe": "apply_liger_kernel_to_qwen3_moe",
+        "llama": "apply_liger_kernel_to_llama",
+    }
+    if model_type not in patches:
+        raise SystemExit(f"--use-liger: no base-kernel patch registered for model_type "
+                         f"{model_type!r} (known: {sorted(patches)})")
+    from liger_kernel.transformers import monkey_patch as liger_mp
+
+    getattr(liger_mp, patches[model_type])(
+        rope=True, rms_norm=True, swiglu=True,
+        cross_entropy=False, fused_linear_cross_entropy=False,
+    )
+    print(f"[rlforge] liger base kernels applied for {model_type}")
+
+
+def _patch_attention_for_old_gpus() -> None:
+    """A100/older compat: TRL hardcodes the flash-attn3 kernel (Hopper-only); swap to
+    flash_attention_2 when the local device is pre-Hopper. No-op on H100/H200."""
+    if not torch.cuda.is_available() or torch.cuda.get_device_capability(0)[0] >= 9:
+        return
+    import trl.experimental.async_grpo.async_grpo_trainer as agt
+
+    orig = agt.create_model_from_path
+
+    def with_fa2(*a, **kw):
+        if kw.get("attn_implementation") == "kernels-community/flash-attn3":
+            kw["attn_implementation"] = "flash_attention_2"
+        return orig(*a, **kw)
+
+    agt.create_model_from_path = with_fa2
+    print("[rlforge] pre-Hopper GPU detected: attention implementation -> flash_attention_2")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="local model path or HF model id")
@@ -294,7 +340,29 @@ def main():
                          "(rlforge.report) is independent of this.")
     ap.add_argument("--run-name", default=None,
                     help="run name for the tracker integrations (default: run dir name)")
+    # --- performance knobs (see docs/OPTIMIZATION.md) -------------------------------
+    ap.add_argument("--use-liger", action="store_true",
+                    help="apply liger base kernels (RMSNorm/RoPE/SwiGLU) to the model "
+                         "class before init. NOT the fused-linear-CE path (the async "
+                         "trainer forbids it and it conflicts with logprob scoring).")
+    ap.add_argument("--no-grad-ckpt", action="store_true",
+                    help="disable gradient checkpointing (~30%% faster, much more VRAM; "
+                         "fits at <=1B on >=140GB cards, keep ON on A100-40/80G)")
+    ap.add_argument("--optim", default=None,
+                    help="HF optimizer name, e.g. adamw_torch_fused (default: TRL's)")
+    ap.add_argument("--allow-tf32", action="store_true",
+                    help="enable TF32 matmul (matters for the fp32-master recipe; "
+                         "bf16 compute is unaffected)")
     args = ap.parse_args()
+
+    if args.allow_tf32:
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+
+    if args.use_liger:
+        _apply_liger_base_kernels(args.model)
+
+    _patch_attention_for_old_gpus()
 
     rows = [json.loads(line) for line in open(args.train)]
     ds = Dataset.from_list(rows)
@@ -324,7 +392,7 @@ def main():
         chat_template_kwargs={} if args.no_thinking else {"enable_thinking": True},
         vllm_server_base_url=args.server_url,
         bf16=True,
-        gradient_checkpointing=True,
+        gradient_checkpointing=not args.no_grad_ckpt,
         logging_steps=1,
         save_strategy="steps",
         save_steps=args.save_steps,
@@ -339,9 +407,21 @@ def main():
     )
     if args.dtype == "bfloat16":
         cfg_kwargs["dtype"] = "bfloat16"
+    if args.optim:
+        cfg_kwargs["optim"] = args.optim
     if args.max_steps:
         cfg_kwargs["max_steps"] = args.max_steps
         cfg_kwargs.pop("num_train_epochs")
+    # TRL's experimental config is a filtered dataclass, not the full
+    # TrainingArguments -- unknown kwargs raise TypeError (e.g. logging_dir on
+    # TRL 1.14). Filter to declared fields; dropped keys are reported so a
+    # silently-ignored option is visible in the log.
+    import dataclasses
+    known = {f.name for f in dataclasses.fields(AsyncGRPOConfig)}
+    dropped = sorted(set(cfg_kwargs) - known)
+    if dropped:
+        print(f"[rlforge] config keys not supported by this TRL version, dropped: {dropped}")
+    cfg_kwargs = {k: v for k, v in cfg_kwargs.items() if k in known}
     cfg = AsyncGRPOConfig(**cfg_kwargs)
 
     trainer_cls = GSPOAsyncGRPOTrainer if args.gspo else AsyncGRPOTrainer

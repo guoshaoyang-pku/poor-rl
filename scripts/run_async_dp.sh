@@ -27,7 +27,9 @@ mkdir -p logs runs evals
 export TMPDIR="${TMPDIR:-$ROOT/tmp}"
 export TRITON_CACHE_DIR="${TRITON_CACHE_DIR:-$ROOT/tmp/triton}"
 export VLLM_CACHE_DIR="${VLLM_CACHE_DIR:-$ROOT/tmp/vllm}"
-export VLLM_USE_FLASHINFER_SAMPLER="${VLLM_USE_FLASHINFER_SAMPLER:-0}"
+# FI_SAMPLER=1 enables the batched flashinfer sampler -- needs nvcc (JIT); offline nodes
+# keep 0. Respects a pre-set VLLM_USE_FLASHINFER_SAMPLER from the node env file.
+export VLLM_USE_FLASHINFER_SAMPLER="${FI_SAMPLER:-${VLLM_USE_FLASHINFER_SAMPLER:-0}}"
 export VLLM_ALLREDUCE_USE_FLASHINFER="${VLLM_ALLREDUCE_USE_FLASHINFER:-0}"
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
@@ -41,6 +43,12 @@ DTYPE="${DTYPE:-none}"
 #   DTYPE=none    + MIXED_PRECISION=bf16 -> fp32 master weights + bf16 autocast compute
 #     (the recipe for low-precision work: small lr updates land on fp32 masters)
 MIXED_PRECISION="${MIXED_PRECISION:-no}"
+# Perf knobs (docs/OPTIMIZATION.md). Defaults = validated-safe on H200.
+LIGER="${LIGER:-0}"            # 1 = liger base kernels (rmsnorm/rope/swiglu)
+GRAD_CKPT="${GRAD_CKPT:-1}"    # 0 = disable grad ckpt (~30%% trainer, needs VRAM)
+OPTIM="${OPTIM:-}"             # e.g. adamw_torch_fused
+TF32="${TF32:-0}"              # 1 = allow tf32 (fp32-master recipe)
+DYNAMO="${DYNAMO:-no}"         # inductor = torch.compile via accelerate (test first)
 GSPO="${GSPO:-1}"
 GSPO_NORM="${GSPO_NORM:-seq_mean}"
 GSPO_EPS_LOW="${GSPO_EPS_LOW:-3e-4}"
@@ -73,6 +81,10 @@ if [ "$GSPO" = "1" ]; then
   EXTRA_ARGS="$EXTRA_ARGS --gspo --gspo-norm $GSPO_NORM --gspo-eps-low $GSPO_EPS_LOW --gspo-eps-high $GSPO_EPS_HIGH"
 fi
 [ "$MAX_STEPS" != "0" ] && EXTRA_ARGS="$EXTRA_ARGS --max-steps $MAX_STEPS"
+[ "$LIGER" = "1" ] && EXTRA_ARGS="$EXTRA_ARGS --use-liger"
+[ "$GRAD_CKPT" = "0" ] && EXTRA_ARGS="$EXTRA_ARGS --no-grad-ckpt"
+[ -n "$OPTIM" ] && EXTRA_ARGS="$EXTRA_ARGS --optim $OPTIM"
+[ "$TF32" = "1" ] && EXTRA_ARGS="$EXTRA_ARGS --allow-tf32"
 # Must exceed the worst-case single request: max_completion tokens at the per-sequence rate
 # implied by MAX_SEQS. At TRL's 120 s default an 8k completion cannot finish when the server
 # runs ~1000 sequences, so every request times out and the trainer never sees a first batch.
@@ -88,6 +100,7 @@ mkdir -p "$OUT"
 echo "[dp] mode=$MODE data=$DATA out=$OUT gspo=$GSPO norm=${GSPO_NORM:-} eps=${GSPO_EPS_LOW:-}/${GSPO_EPS_HIGH:-} cps=$CPS ngen=$NGEN stale=$STALE inflight=$INFLIGHT lr=$LR"
 echo "[dp] rollout GPUs=$SERVER_GPUS TP=$TP | trainer GPUs=$TRAINER_GPUS ranks=$NUM_TRAINER | max_completion=$MAX_COMPLETION"
 echo "[dp] epochs=$EPOCHS max_steps=${MAX_STEPS:-0} save_steps=${SAVE:-50} request_timeout=$REQUEST_TIMEOUT task_log=$RLFORGE_TASK_LOG"
+echo "[dp] perf: liger=$LIGER grad_ckpt=$GRAD_CKPT optim=${OPTIM:-default} tf32=$TF32 dynamo=$DYNAMO fi_sampler=$VLLM_USE_FLASHINFER_SAMPLER kv_dtype=${KV_DTYPE:-auto}"
 
 # Throughput knobs. On this workload vLLM's stock ceilings throttle the rollout:
 # ~900 sequences run concurrently, but CUDA graphs are only captured up to
@@ -218,7 +231,7 @@ set +e
 if [ -n "${ACCELERATE_CONFIG:-}" ]; then
   ACC_LAUNCH=(accelerate launch --config_file "$ACCELERATE_CONFIG" --num_processes "$NUM_TRAINER")
 else
-  ACC_LAUNCH=(accelerate launch --num_processes "$NUM_TRAINER" --mixed_precision "$MIXED_PRECISION" --dynamo_backend no)
+  ACC_LAUNCH=(accelerate launch --num_processes "$NUM_TRAINER" --mixed_precision "$MIXED_PRECISION" --dynamo_backend "$DYNAMO")
 fi
 CUDA_VISIBLE_DEVICES=$TRAINER_GPUS "${ACC_LAUNCH[@]}" \
     -m rlforge.trainer \
