@@ -39,12 +39,14 @@ _LIVE_WINDOW_S = 600  # trainer log touched within 10 min -> run counts as live
 
 
 class RunSpec:
-    def __init__(self, name, run_dir, trainer_log=None, eval_history=None, base_eval=None):
+    def __init__(self, name, run_dir, trainer_log=None, eval_history=None, base_eval=None,
+                 notes=None):
         self.name = name
         self.run_dir = Path(run_dir)
         self.trainer_log = Path(trainer_log) if trainer_log else None
         self.eval_history = Path(eval_history) if eval_history else None
         self.base_eval = Path(base_eval) if base_eval else None
+        self.notes = notes  # optional HTML block shown at the bottom of the run page
 
     def resolve(self, root: Path):
         for attr in ("run_dir", "trainer_log", "eval_history", "base_eval"):
@@ -88,6 +90,7 @@ class State:
     def __init__(self, args):
         self.root = Path(args.root).resolve() if args.root else None
         self.registry_path = Path(args.registry) if args.registry else None
+        self.min_steps = args.min_steps
         self._specs = {}
         self._cache = {}  # (run_name, key) -> (mtime, value)
         if args.run:
@@ -114,6 +117,8 @@ class State:
                                 ("base_eval", "base_eval")):
                     if entry.get(k):
                         setattr(base, attr, Path(entry[k]))
+                if entry.get("notes") is not None:
+                    base.notes = entry["notes"]
                 self._specs[name] = base.resolve(self.root) if self.root else base
 
     @staticmethod
@@ -158,6 +163,8 @@ class State:
                 continue  # no curves -> skip (per user request)
             live = cur is not None and (total is None or cur < total) and \
                 (time.time() - touch) < _LIVE_WINDOW_S
+            if not live and (cur is None or cur < self.min_steps):
+                continue  # short/aborted trial -- hide from the trail
             out.append({"name": name, "step": cur, "total": total,
                         "live": live, "touch": touch})
         out.sort(key=lambda r: (-r["live"], -r["touch"]))
@@ -178,8 +185,24 @@ class State:
                              lambda: parse_eval_history(spec.eval_history)
                              if spec.eval_history and spec.eval_history.exists() else [])
         base = self._cached(name, "base", spec.base_eval, lambda: self._load_base(spec))
+        meta = self._cached(name, "meta", spec.run_dir / "run.json",
+                            lambda: self._load_meta(spec))
         return {"run": name, "steps": steps, "task_bins": tasks,
-                "evals": evals, "base": base, "status": self._status(spec, steps, evals)}
+                "evals": evals, "base": base, "meta": meta,
+                "notes": spec.notes, "status": self._status(spec, steps, evals)}
+
+    @staticmethod
+    def _load_meta(spec):
+        p = spec.run_dir / "run.json"
+        if not p.exists():
+            return None
+        try:
+            d = json.load(open(p))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return {"data_file": d.get("data_file"),
+                "stop_reason": d.get("stop_reason"),
+                "hyperparams": d.get("hyperparams")}
 
     @staticmethod
     def _load_base(spec):
@@ -222,9 +245,15 @@ _HTML = """<!doctype html>
  .panel{background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px}
  .panel h3{margin:2px 4px 6px;font-size:12.5px;color:#444;font-weight:600}
  canvas{width:100%;height:220px;display:block}
+ #notes{margin:0 12px 16px;background:#fff;border:1px solid #ddd;border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.55;display:none}
+ #notes h3{margin:0 0 6px;font-size:13px;color:#333}
+ #notes pre{background:#f5f5f5;padding:8px;border-radius:4px;font-size:11px;overflow-x:auto}
+ #notes table{border-collapse:collapse;margin:6px 0}
+ #notes td,#notes th{border:1px solid #ddd;padding:2px 8px;font-size:12px}
 </style></head><body>
 <header><h1>rlforge</h1><select id="runsel"></select><span class="stat" id="status">loading…</span></header>
 <div id="grid"></div>
+<div id="notes"></div>
 <script>
 const PALETTE = ['#1f77b4','#2ca02c','#d62728','#9467bd','#ff7f0e','#17becf','#8c564b','#e377c2'];
 let colorIdx = 0; const colorFor = {};
@@ -315,6 +344,9 @@ async function refreshMetrics(){
       ymin:0, ymax:1, hlines:[{y:0.5,color:'#d62728'},{y:0.9,color:'#8b0000'}]});
     draw(panel('sequence length (mean completion tokens, log)'), {series:[
       series(sx, S.map(r=>r.meanlen), 'mean tokens')], logy:true});
+    draw(panel('step time (s/step, raw + 20-step mean)'), {series:[
+      series(sx, S.map(r=>r.step_s), 'step_s', {thin:true, alpha:0.25}),
+      series(sx, rolling(S.map(r=>r.step_s),20), 'step_s (smooth)')]});
     draw(panel('KL & entropy'), {series:[
       series(sx, S.map(r=>r.kl), 'kl'), series(sx, S.map(r=>r.entropy), 'entropy')]});
   }
@@ -355,6 +387,17 @@ async function refreshMetrics(){
     if(cm!=null)hl.push({y:cm,color:'#1f77b4'}); if(cr!=null)hl.push({y:cr,color:'#2ca02c'});
     draw(panel('held-out accuracy ladder'), {series:ser, ymin:0, ymax:1.02, hlines:hl});
   }
+  const nb = document.getElementById('notes');
+  let nhtml = '';
+  if(d.notes) nhtml += d.notes;
+  if(d.meta && (d.meta.hyperparams || d.meta.data_file)){
+    nhtml += '<h3>run.json</h3>';
+    if(d.meta.data_file) nhtml += '<div>data: <code>'+d.meta.data_file+'</code></div>';
+    if(d.meta.stop_reason) nhtml += '<div>stop_reason: <code>'+d.meta.stop_reason+'</code></div>';
+    if(d.meta.hyperparams) nhtml += '<pre>'+JSON.stringify(d.meta.hyperparams,null,1)+'</pre>';
+  }
+  nb.style.display = nhtml ? 'block' : 'none';
+  nb.innerHTML = nhtml;
 }
 async function tick(){ await refreshRuns(); await refreshMetrics(); }
 tick(); setInterval(tick, 10000);
@@ -407,6 +450,8 @@ def main():
     ap.add_argument("--trainer-log", default=None)
     ap.add_argument("--eval-history", default=None)
     ap.add_argument("--base-eval", default=None)
+    ap.add_argument("--min-steps", type=int, default=50,
+                    help="hide finished runs with fewer logged steps (short/aborted trials)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8871)
     args = ap.parse_args()
