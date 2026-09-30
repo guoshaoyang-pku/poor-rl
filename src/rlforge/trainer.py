@@ -418,6 +418,13 @@ def main():
     # silently-ignored option is visible in the log.
     import dataclasses
     known = {f.name for f in dataclasses.fields(AsyncGRPOConfig)}
+    if report_to and "logging_dir" not in known:
+        # The TB callback reads args.logging_dir; on TRL versions whose config
+        # lacks the field the callback crashes. Disable trackers instead --
+        # the rlforge.report HTML panel is unaffected.
+        print("[rlforge] this TRL version's config has no logging_dir; "
+              "report_to disabled (use the rlforge.report panel instead)")
+        cfg_kwargs["report_to"] = []
     dropped = sorted(set(cfg_kwargs) - known)
     if dropped:
         print(f"[rlforge] config keys not supported by this TRL version, dropped: {dropped}")
