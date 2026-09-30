@@ -2,18 +2,26 @@
 """Live metrics dashboard for rlforge runs -- localhost panel, no external deps.
 
 Serves a single-page panel that auto-refreshes every few seconds and redraws the
-moment a new training step lands in the trainer log:
+moment a new training step lands in the trainer log. Multi-run: every run under
+the project root is registered automatically (the "trail"), newest-active first;
+finished runs keep their full curves.
 
-    python -m rlforge.dashboard --run runs/async_dp_flip450 \
-        --trainer-log logs/trainer_dp_flip450.log \
-        --eval-history evals/async_dp_flip450/history.jsonl \
-        --base-eval evals/base_flip50.json --port 8871
+    python -m rlforge.dashboard --root /path/to/project --port 8871
+
+    # or a single run explicitly:
+    python -m rlforge.dashboard --run runs/X --trainer-log logs/trainer_X.log ...
 
 Then open http://localhost:8871 (on a remote node: ssh -L 8871:localhost:8871 <host>).
 
-Panels: per-step reward / truncation & GSPO seq-clip / per-task reward-accuracy-
-truncation / per-source curves / sequence length / KL & entropy / held-out ladder.
-Parsing is shared with rlforge.report and cached by file mtime, so polling is cheap.
+Run discovery (--root): scans runs/*/, matching logs/trainer_dp_<suffix>.log and
+evals/<name>/history.jsonl by the async_dp_<suffix> naming convention. A registry
+file (--registry, JSON, re-read every poll) can add/override entries, e.g. base
+eval paths:
+
+    {"async_dp_v3full": {"base_eval": "evals/base_eval300_v3.json"}}
+
+Runs whose files yield no parseable data are hidden from the trail.
+Parsing is shared with rlforge.report and cached per run by file mtime.
 """
 from __future__ import annotations
 
@@ -27,15 +35,86 @@ from pathlib import Path
 from rlforge.report import parse_eval_history, parse_task_split, parse_trainer_log
 
 _PROGRESS_RE = re.compile(r"(\d+)/(\d+) \[")
+_LIVE_WINDOW_S = 600  # trainer log touched within 10 min -> run counts as live
+
+
+class RunSpec:
+    def __init__(self, name, run_dir, trainer_log=None, eval_history=None, base_eval=None):
+        self.name = name
+        self.run_dir = Path(run_dir)
+        self.trainer_log = Path(trainer_log) if trainer_log else None
+        self.eval_history = Path(eval_history) if eval_history else None
+        self.base_eval = Path(base_eval) if base_eval else None
+
+    def resolve(self, root: Path):
+        for attr in ("run_dir", "trainer_log", "eval_history", "base_eval"):
+            p = getattr(self, attr)
+            if p is not None and not p.is_absolute():
+                setattr(self, attr, root / p)
+        return self
+
+    def last_touch(self) -> float:
+        mt = 0.0
+        for p in (self.trainer_log, self.run_dir / "task_split.jsonl", self.eval_history):
+            try:
+                if p:
+                    mt = max(mt, p.stat().st_mtime)
+            except OSError:
+                pass
+        return mt
+
+
+def discover(root: Path) -> dict[str, RunSpec]:
+    found = {}
+    runs = root / "runs"
+    if runs.exists():
+        for d in sorted(runs.iterdir()):
+            if not d.is_dir():
+                continue
+            suffix = d.name[len("async_dp_"):] if d.name.startswith("async_dp_") else d.name
+            tlog = root / "logs" / f"trainer_dp_{suffix}.log"
+            hist = root / "evals" / d.name / "history.jsonl"
+            has_any = (d / "task_split.jsonl").exists() or tlog.exists() or hist.exists()
+            if has_any:
+                found[d.name] = RunSpec(
+                    d.name, d,
+                    tlog if tlog.exists() else None,
+                    hist if hist.exists() else None,
+                )
+    return found
 
 
 class State:
     def __init__(self, args):
-        self.run = Path(args.run)
-        self.trainer_log = Path(args.trainer_log)
-        self.eval_history = Path(args.eval_history) if args.eval_history else None
-        self.base_eval_path = Path(args.base_eval) if args.base_eval else None
-        self._cache = {}
+        self.root = Path(args.root).resolve() if args.root else None
+        self.registry_path = Path(args.registry) if args.registry else None
+        self._specs = {}
+        self._cache = {}  # (run_name, key) -> (mtime, value)
+        if args.run:
+            spec = RunSpec(Path(args.run).name, args.run, args.trainer_log,
+                           args.eval_history, args.base_eval)
+            if self.root:
+                spec.resolve(self.root)
+            self._specs[spec.name] = spec
+
+    def _refresh_specs(self):
+        if self.root:
+            for name, spec in discover(self.root).items():
+                self._specs.setdefault(name, spec)
+        if self.registry_path and self.registry_path.exists():
+            try:
+                reg = json.load(open(self.registry_path))
+            except (OSError, json.JSONDecodeError):
+                reg = {}
+            for name, entry in reg.items():
+                base = self._specs.get(name) or RunSpec(
+                    name, entry.get("run", f"runs/{name}"))
+                for k, attr in (("trainer_log", "trainer_log"),
+                                ("eval_history", "eval_history"),
+                                ("base_eval", "base_eval")):
+                    if entry.get(k):
+                        setattr(base, attr, Path(entry[k]))
+                self._specs[name] = base.resolve(self.root) if self.root else base
 
     @staticmethod
     def _mtime(p: Path | None) -> float:
@@ -44,53 +123,87 @@ class State:
         except OSError:
             return -1.0
 
-    def _cached(self, key: str, path: Path | None, builder):
+    def _cached(self, run: str, key: str, path: Path | None, builder):
         mt = self._mtime(path)
-        ent = self._cache.get(key)
+        ck = (run, key)
+        ent = self._cache.get(ck)
         if ent and ent[0] == mt:
             return ent[1]
         val = builder()
-        self._cache[key] = (mt, val)
+        self._cache[ck] = (mt, val)
         return val
 
-    def payload(self) -> dict:
-        steps = self._cached("steps", self.trainer_log,
-                             lambda: parse_trainer_log(self.trainer_log) if self.trainer_log.exists() else [])
-        task_path = self.run / "task_split.jsonl"
-        tasks = self._cached("tasks", task_path,
-                             lambda: parse_task_split(task_path) if task_path.exists() else [])
-        evals = self._cached("evals", self.eval_history,
-                             lambda: parse_eval_history(self.eval_history)
-                             if self.eval_history and self.eval_history.exists() else [])
-        base = self._cached("base", self.base_eval_path, self._load_base)
-        return {"run": self.run.name, "steps": steps, "task_bins": tasks,
-                "evals": evals, "base": base, "status": self._status(steps, evals)}
+    def _progress(self, spec: RunSpec):
+        cur = total = None
+        if spec.trainer_log and spec.trainer_log.exists():
+            try:
+                tail = spec.trainer_log.read_bytes()[-262144:].decode(errors="replace")
+                prog = _PROGRESS_RE.findall(tail)
+                if prog:
+                    cur, total = int(prog[-1][0]), int(prog[-1][1])
+            except OSError:
+                pass
+        return cur, total
 
-    def _load_base(self):
-        if not self.base_eval_path or not self.base_eval_path.exists():
+    def list_runs(self) -> list[dict]:
+        self._refresh_specs()
+        out = []
+        for name, spec in self._specs.items():
+            cur, total = self._progress(spec)
+            touch = spec.last_touch()
+            has_data = bool(touch)
+            if cur is not None or (spec.eval_history and spec.eval_history.exists()):
+                has_data = True
+            if not has_data:
+                continue  # no curves -> skip (per user request)
+            live = cur is not None and (total is None or cur < total) and \
+                (time.time() - touch) < _LIVE_WINDOW_S
+            out.append({"name": name, "step": cur, "total": total,
+                        "live": live, "touch": touch})
+        out.sort(key=lambda r: (-r["live"], -r["touch"]))
+        return out
+
+    def payload(self, name: str) -> dict:
+        self._refresh_specs()
+        spec = self._specs.get(name)
+        if spec is None:
+            return {"error": f"unknown run {name!r}", "runs": [r["name"] for r in self.list_runs()]}
+        steps = self._cached(name, "steps", spec.trainer_log,
+                             lambda: parse_trainer_log(spec.trainer_log)
+                             if spec.trainer_log and spec.trainer_log.exists() else [])
+        task_path = spec.run_dir / "task_split.jsonl"
+        tasks = self._cached(name, "tasks", task_path,
+                             lambda: parse_task_split(task_path) if task_path.exists() else [])
+        evals = self._cached(name, "evals", spec.eval_history,
+                             lambda: parse_eval_history(spec.eval_history)
+                             if spec.eval_history and spec.eval_history.exists() else [])
+        base = self._cached(name, "base", spec.base_eval, lambda: self._load_base(spec))
+        return {"run": name, "steps": steps, "task_bins": tasks,
+                "evals": evals, "base": base, "status": self._status(spec, steps, evals)}
+
+    @staticmethod
+    def _load_base(spec):
+        if not spec.base_eval or not spec.base_eval.exists():
             return None
-        d = json.load(open(self.base_eval_path))
+        d = json.load(open(spec.base_eval))
         if "overall" not in d and "summary" in d:
             d = d["summary"]
         return d
 
-    def _status(self, steps, evals) -> dict:
-        cur = total = None
-        try:
-            tail = self.trainer_log.read_bytes()[-262144:].decode(errors="replace")
-            prog = _PROGRESS_RE.findall(tail)
-            if prog:
-                cur, total = int(prog[-1][0]), int(prog[-1][1])
-        except OSError:
-            pass
+    def _status(self, spec, steps, evals) -> dict:
+        cur, total = self._progress(spec)
         recent = [s["step_s"] for s in steps[-20:] if s.get("step_s")]
         sps = sum(recent) / len(recent) if recent else None
+        touch = spec.last_touch()
+        live = cur is not None and (total is None or cur < total) and \
+            (time.time() - touch) < _LIVE_WINDOW_S
         return {
             "step": cur if cur is not None else len(steps),
             "total": total,
             "step_s": round(sps, 1) if sps else None,
-            "eta_min": round((total - cur) * sps / 60) if (total and cur and sps) else None,
+            "eta_min": round((total - cur) * sps / 60) if (total and cur and sps and live) else None,
             "n_evals": len(evals),
+            "live": live,
             "updated": time.strftime("%H:%M:%S"),
         }
 
@@ -103,16 +216,19 @@ _HTML = """<!doctype html>
  header h1{font-size:16px;margin:0}
  header .stat{font-size:12px;opacity:.9}
  header .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;margin-right:5px}
+ header .dot.dead{background:#888}
+ #runsel{background:#2c3949;color:#fff;border:1px solid #4a5a6e;border-radius:4px;padding:2px 6px;font-size:12.5px}
  #grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:10px;padding:12px}
  .panel{background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px}
  .panel h3{margin:2px 4px 6px;font-size:12.5px;color:#444;font-weight:600}
  canvas{width:100%;height:220px;display:block}
 </style></head><body>
-<header><h1 id="title">rlforge</h1><span class="stat" id="status">loading…</span></header>
+<header><h1>rlforge</h1><select id="runsel"></select><span class="stat" id="status">loading…</span></header>
 <div id="grid"></div>
 <script>
 const PALETTE = ['#1f77b4','#2ca02c','#d62728','#9467bd','#ff7f0e','#17becf','#8c564b','#e377c2'];
 let colorIdx = 0; const colorFor = {};
+let currentRun = localStorage.getItem('rlforge_run') || null;
 function col(name){ if(!(name in colorFor)){ colorFor[name]=PALETTE[colorIdx++%PALETTE.length]; } return colorFor[name]; }
 function rolling(ys,w){ const out=[];let s=0;const q=[]; for(const y of ys){ if(y==null){out.push(null);continue;} q.push(y);s+=y; if(q.length>w)s-=q.shift(); out.push(s/q.length);} return out; }
 function panel(title){ const d=document.createElement('div'); d.className='panel'; const h=document.createElement('h3'); h.textContent=title; d.appendChild(h);
@@ -158,13 +274,32 @@ function draw(cv, cfg){
 }
 function series(xs, ys, name, opts){ return Object.assign({x:xs, y:ys, name:name, color:col(name)}, opts||{}); }
 
-async function refresh(){
-  let d; try{ d = await (await fetch('/api/metrics')).json(); } catch(e){ return; }
-  document.getElementById('title').textContent = 'rlforge · '+d.run;
+async function refreshRuns(){
+  let runs; try{ runs = await (await fetch('/api/runs')).json(); } catch(e){ return; }
+  const sel = document.getElementById('runsel');
+  const prev = currentRun;
+  sel.innerHTML = '';
+  for(const r of runs){
+    const o = document.createElement('option'); o.value = r.name;
+    o.textContent = (r.live?'● ':'○ ')+r.name+(r.step!=null?('  '+r.step+(r.total?'/'+r.total:'')):'');
+    sel.appendChild(o);
+  }
+  if(!prev || !runs.some(r=>r.name===prev)) currentRun = runs.length ? runs[0].name : null;
+  sel.value = currentRun;
+}
+document.getElementById('runsel').addEventListener('change', e=>{
+  currentRun = e.target.value; localStorage.setItem('rlforge_run', currentRun); refreshMetrics();
+});
+
+async function refreshMetrics(){
+  if(!currentRun) return;
+  let d; try{ d = await (await fetch('/api/metrics?run='+encodeURIComponent(currentRun))).json(); } catch(e){ return; }
+  if(d.error){ return; }
   const st=d.status;
   document.getElementById('status').innerHTML =
-    '<span class="dot"></span>step '+(st.step!=null?st.step:'?')+(st.total?' / '+st.total:'')+
-    (st.step_s?' · '+st.step_s+' s/step':'')+(st.eta_min!=null?' · ETA '+st.eta_min+' min':'')+
+    '<span class="dot'+(st.live?'':' dead')+'"></span>'+(st.live?'live · ':'finished · ')+
+    'step '+(st.step!=null?st.step:'?')+(st.total?' / '+st.total:'')+
+    (st.step_s&&st.live?' · '+st.step_s+' s/step':'')+(st.eta_min!=null?' · ETA '+st.eta_min+' min':'')+
     ' · '+st.n_evals+' held-out evals · updated '+st.updated;
   document.getElementById('grid').innerHTML=''; colorIdx=0; for(const k in colorFor)delete colorFor[k];
 
@@ -221,7 +356,8 @@ async function refresh(){
     draw(panel('held-out accuracy ladder'), {series:ser, ymin:0, ymax:1.02, hlines:hl});
   }
 }
-refresh(); setInterval(refresh, 10000);
+async function tick(){ await refreshRuns(); await refreshMetrics(); }
+tick(); setInterval(tick, 10000);
 </script></body></html>"""
 
 
@@ -229,11 +365,19 @@ def make_handler(state: State):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path.startswith("/api/metrics"):
+                from urllib.parse import urlparse, parse_qs
+                q = parse_qs(urlparse(self.path).query)
+                name = (q.get("run") or [None])[0]
+                if name is None:
+                    runs = state.list_runs()
+                    name = runs[0]["name"] if runs else ""
                 try:
-                    body = json.dumps(state.payload()).encode()
+                    body = json.dumps(state.payload(name)).encode()
                 except Exception as e:  # a half-written file must never kill the panel
                     body = json.dumps({"error": str(e)}).encode()
                 self._reply(200, body, "application/json")
+            elif self.path.startswith("/api/runs"):
+                self._reply(200, json.dumps(state.list_runs()).encode(), "application/json")
             elif self.path in ("/", "/index.html"):
                 self._reply(200, _HTML.encode(), "text/html; charset=utf-8")
             else:
@@ -255,16 +399,22 @@ def make_handler(state: State):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--run", required=True)
-    ap.add_argument("--trainer-log", required=True)
+    ap.add_argument("--root", default=None,
+                    help="project root with runs/ logs/ evals/; auto-registers every run")
+    ap.add_argument("--registry", default=None,
+                    help="optional JSON registry for per-run overrides (re-read every poll)")
+    ap.add_argument("--run", default=None, help="single-run mode: run directory")
+    ap.add_argument("--trainer-log", default=None)
     ap.add_argument("--eval-history", default=None)
     ap.add_argument("--base-eval", default=None)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8871)
     args = ap.parse_args()
+    if not args.root and not args.run:
+        ap.error("either --root (multi-run trail) or --run (single run) is required")
     state = State(args)
     srv = ThreadingHTTPServer((args.host, args.port), make_handler(state))
-    print(f"[dashboard] {state.run.name} -> http://{args.host}:{args.port} "
+    print(f"[dashboard] http://{args.host}:{args.port} "
           f"(remote: ssh -L {args.port}:localhost:{args.port} <host>)", flush=True)
     srv.serve_forever()
 
