@@ -193,7 +193,7 @@ class DQNTrialAdapter:
             status = "finished"
             try:
                 import time
-                if time.time() - metrics_path.stat().st_mtime <= 600:
+                if time.time() - metrics_path.stat().st_mtime <= 2700:
                     status = "live"
             except OSError:
                 pass
