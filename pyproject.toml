@@ -18,10 +18,16 @@ dependencies = [
     "datasets>=3.0",
     "accelerate>=1.0",
     "matplotlib>=3.8",
+    "swanlab>=0.5",
 ]
 
+[project.scripts]
+rlforge-agentic = "rlforge.agent_cli:main"
+
 [project.optional-dependencies]
+agent-mcp = ["mcp>=1.0"]
 dev = ["pytest>=8"]
+panel = ["swanlab[dashboard]>=0.5"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
