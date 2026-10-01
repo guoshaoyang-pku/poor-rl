@@ -9,9 +9,10 @@ Everything below is scoped by that -- we are not rebuilding verl's multi-node st
   (`MIXED_PRECISION=bf16 DTYPE=none`) is wired into the launcher; bf16-pure remains
   the fast default. Next: fp8 experiments on Hopper once the reward signal justifies
   the engineering (watch update-to-weight magnitude ratios).
-- **RL panel** (`docs/PANEL.md`): TensorBoard via `REPORT_TO=tensorboard` +
-  `scripts/panel.sh`, alongside the built-in HTML report for RL-specific curves.
-  Other backends (wandb/mlflow/swanlab) work through the same `--report-to` flag.
+- **Experiment tracking** (`docs/PANEL.md`): SwanLab local mode is the default
+  cross-workload tracker for RL, SFT, and custom PyTorch runs; `scripts/panel.sh`
+  starts its local dashboard. The built-in HTML report provides RL-specific
+  curves; RL-Insight is an optional verl runtime-observability companion.
 
 ## Planned
 
@@ -36,4 +37,4 @@ Everything below is scoped by that -- we are not rebuilding verl's multi-node st
 - Multi-node training (use verl).
 - Classic control value-based RL (DQN/AlphaZero -- see the note in
   `docs/COMPATIBILITY.md` on how such projects reuse rlforge's watchdog/panel).
-- A bespoke web UI for the panel -- we pull TensorBoard instead of building one.
+- Replacing established experiment trackers with a bespoke general-purpose UI.

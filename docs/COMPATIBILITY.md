@@ -28,7 +28,7 @@ That project trains the same 0.8B class backbone two ways:
   discrete-action, replay-buffer RL. This is deliberately **not** what rlforge
   reimplements (scope: generative RL). The reusable pieces from rlforge there are
   the watchdog pattern (auto-stop rules over a live run), the panel
-  (TensorBoard over `runs/`), and the run-manifest contract.
+  (SwanLab experiment tracking), and the run-manifest contract.
 - **GRPO/GSPO on the same backbone** (e.g. reasoning arms on game traces rendered
   as text): fully supported -- point `MODEL` at the backbone directory, pass
   `--no-thinking` if the checkpoint's template lacks the thinking flag, and use a

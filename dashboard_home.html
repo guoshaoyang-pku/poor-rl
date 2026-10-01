@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f4f6fb">
+<title>rlforge · Experiment Home</title>
+<style>
+:root{color-scheme:light;--ink:#182338;--muted:#64718a;--line:#e1e6ef;--paper:#fff;--blue:#3858d6;--bg:#f4f6fb;--green:#13845b}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 84% 0,#e3e9ff 0,transparent 34%),var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Helvetica Neue",sans-serif}.shell{width:min(1080px,calc(100% - 40px));margin:0 auto;padding:54px 0 42px}.eyebrow{display:flex;align-items:center;gap:9px;color:var(--blue);font-size:12px;font-weight:750;letter-spacing:.12em;text-transform:uppercase}.mark{display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--blue);color:white;font-weight:800;letter-spacing:0}.hero{display:flex;justify-content:space-between;gap:32px;align-items:flex-end;margin:24px 0 30px}.hero h1{font-size:clamp(34px,5vw,54px);line-height:1.05;letter-spacing:-.045em;margin:0 0 14px}.hero p{color:var(--muted);font-size:16px;max-width:650px;margin:0}.local{white-space:nowrap;border:1px solid #dbe3f3;border-radius:999px;padding:8px 12px;background:#ffffffb8;color:#46536b;font-size:12px}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{--accent:var(--blue);display:flex;flex-direction:column;min-height:288px;background:var(--paper);border:1px solid var(--line);border-radius:17px;padding:21px;box-shadow:0 10px 28px #25365a0a;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}.card:hover{transform:translateY(-3px);border-color:#c5d0ee;box-shadow:0 16px 36px #25365a13}.card.suika{--accent:#c78024}.card.sft{--accent:#26836b}.card-head{display:flex;justify-content:space-between;align-items:center}.icon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:color-mix(in srgb,var(--accent) 10%,white);color:var(--accent);font-weight:800;font-size:16px}.pill{font-size:11px;color:var(--green);background:#e9f6f0;border-radius:99px;padding:5px 9px}.card h2{font-size:22px;margin:17px 0 5px;letter-spacing:-.02em}.subtitle{color:var(--muted);font-size:13px;min-height:40px}.stats{display:flex;gap:20px;margin:20px 0 19px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.stat strong{display:block;font-size:21px;line-height:1.2}.stat span{color:var(--muted);font-size:11px}.actions{display:flex;gap:9px;margin-top:auto}.button{display:inline-flex;justify-content:center;align-items:center;gap:7px;text-decoration:none;border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:var(--ink);font-weight:650;font-size:13px;background:#fff}.button.primary{background:var(--accent);border-color:var(--accent);color:#fff}.button:hover{filter:brightness(.97)}.arrow{font-size:16px}.note{display:grid;grid-template-columns:1fr auto;gap:22px;align-items:center;margin-top:20px;padding:17px 20px;border:1px solid #e5e9f1;border-radius:13px;background:#ffffffad}.note h3{margin:0 0 4px;font-size:14px}.note p{margin:0;color:var(--muted);font-size:12px}.note a{color:var(--blue);font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap}.footer{display:flex;justify-content:space-between;gap:12px;margin-top:21px;color:#818ba0;font-size:11px}.footer span:last-child{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}@media(max-width:800px){.shell{padding-top:34px}.hero{display:block}.local{display:inline-block;margin-top:16px}.cards{grid-template-columns:1fr}.card{min-height:250px}.subtitle{min-height:0}.note{grid-template-columns:1fr}.footer{display:block}.footer span{display:block;margin-top:5px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="eyebrow"><span class="mark">r</span> RLFORGE <span>·</span> EXPERIMENT HOME</div>
+  <section class="hero">
+    <div><h1>实验面板，一处进入。</h1><p>AIQ、Suika 与 SFT 的数据仍各自隔离；从这里打开对应的 SwanLab 面板。链接会在新标签页打开，Home 保持在当前标签，方便来回切换。</p></div>
+    <div class="local">● 本机面板 · 仅本地访问</div>
+  </section>
+  <section class="cards" aria-label="Experiment dashboards">
+    <article class="card aiq">
+      <div class="card-head"><div class="icon">AIQ</div><span class="pill">3 runs</span></div>
+      <h2>AIQ · LLM RL</h2><div class="subtitle">GSPO / async DP · 训练奖励、held-out accuracy、截断与双侧 sequence clipping。</div>
+      <div class="stats"><div class="stat"><strong>3</strong><span>历史实验</span></div><div class="stat"><strong>2</strong><span>主要任务组</span></div></div>
+      <div class="actions"><a class="button primary" href="http://127.0.0.1:63401/" target="_blank" rel="noopener">打开 AIQ 面板 <span class="arrow">↗</span></a></div>
+    </article>
+    <article class="card suika">
+      <div class="card-head"><div class="icon">RL</div><span class="pill">30 visible / 37 kept</span></div>
+      <h2>Suika · DQN</h2><div class="subtitle">合成大西瓜算法与架构试验 · 训练 online score、greedy eval、吞吐和完整 trial 台账。</div>
+      <div class="stats"><div class="stat"><strong>37</strong><span>保留 runs</span></div><div class="stat"><strong>30</strong><span>正式面板显示</span></div></div>
+      <div class="actions"><a class="button primary" href="http://127.0.0.1:63402/" target="_blank" rel="noopener">打开 Suika 面板 <span class="arrow">↗</span></a></div>
+    </article>
+    <article class="card sft">
+      <div class="card-head"><div class="icon">SFT</div><span class="pill">2 completed</span></div>
+      <h2>SFT · Private Thinking</h2><div class="subtitle">两条已完成候选；178 条训练样本、3 epochs、bf16、学习率 2e−5，评测 300 题。</div>
+      <div class="stats"><div class="stat"><strong>57.5%</strong><span>opus_private_v1 最终准确率</span></div><div class="stat"><strong>57.8%</strong><span>opus_corrected 最终准确率</span></div></div>
+      <div class="actions"><a class="button primary" href="http://127.0.0.1:63403/" target="_blank" rel="noopener">打开 SFT 面板 <span class="arrow">↗</span></a></div>
+    </article>
+  </section>
+  <aside class="note"><div><h3>SFT 候选怎么解读</h3><p>两条都已完成，不是待跑队列；它们的训练文件 SHA-256 与随机种子均不同，因此不是严格的单变量对照。最终准确率接近：57.5% vs 57.8%。</p></div><a href="http://127.0.0.1:63403/" target="_blank" rel="noopener">查看 SFT 训练曲线 ↗</a></aside>
+  <footer class="footer"><span>各面板使用独立 SwanLab 本地数据库，互不合并；关闭 Home 不会停止面板服务。</span><span>rlforge · local dashboard hub</span></footer>
+</main>
+</body>
+</html>

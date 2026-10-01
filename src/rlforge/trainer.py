@@ -12,8 +12,10 @@ a training reward mean the same thing.
 
 import argparse
 import json
+import os
 import time
 from functools import partial
+from pathlib import Path
 
 import torch
 from datasets import Dataset
@@ -334,10 +336,10 @@ def main():
     ap.add_argument("--no-thinking", action="store_true",
                     help="do not pass enable_thinking=True to the chat template "
                          "(Qwen-family templates only; omit for other models)")
-    ap.add_argument("--report-to", default="none",
-                    help="comma-separated HF integrations: tensorboard, wandb, mlflow, "
-                         "swanlab... ('none' disables). The run's own JSONL/HTML panel "
-                         "(rlforge.report) is independent of this.")
+    ap.add_argument("--report-to", default="swanlab",
+                    help="comma-separated HF integrations: swanlab (default), tensorboard, "
+                         "wandb, mlflow... ('none' disables). The run's own JSONL/HTML "
+                         "panel (rlforge.report) is independent of this.")
     ap.add_argument("--run-name", default=None,
                     help="run name for the tracker integrations (default: run dir name)")
     # --- performance knobs (see docs/OPTIMIZATION.md) -------------------------------
@@ -371,6 +373,12 @@ def main():
     gas = max(1, args.completions_per_step // pdb)
 
     report_to = [] if args.report_to in ("none", "") else args.report_to.split(",")
+    if "swanlab" in report_to:
+        output_dir = Path(args.out).resolve()
+        project_root = output_dir.parent.parent if output_dir.parent.name == "runs" else output_dir
+        os.environ.setdefault("SWANLAB_MODE", "local")
+        os.environ.setdefault("SWANLAB_LOGDIR", str(project_root / "swanlog"))
+        os.environ.setdefault("SWANLAB_PROJ_NAME", "AIQ")
 
     cfg_kwargs = dict(
         output_dir=args.out,
@@ -418,13 +426,13 @@ def main():
     # silently-ignored option is visible in the log.
     import dataclasses
     known = {f.name for f in dataclasses.fields(AsyncGRPOConfig)}
-    if report_to and "logging_dir" not in known:
-        # The TB callback reads args.logging_dir; on TRL versions whose config
-        # lacks the field the callback crashes. Disable trackers instead --
-        # the rlforge.report HTML panel is unaffected.
-        print("[rlforge] this TRL version's config has no logging_dir; "
-              "report_to disabled (use the rlforge.report panel instead)")
-        cfg_kwargs["report_to"] = []
+    if "logging_dir" not in known:
+        cfg_kwargs.pop("logging_dir", None)
+        if "tensorboard" in report_to:
+            report_to = [backend for backend in report_to if backend != "tensorboard"]
+            cfg_kwargs["report_to"] = report_to
+            print("[rlforge] this TRL version's config has no logging_dir; "
+                  "TensorBoard reporting disabled, other trackers remain enabled")
     dropped = sorted(set(cfg_kwargs) - known)
     if dropped:
         print(f"[rlforge] config keys not supported by this TRL version, dropped: {dropped}")
