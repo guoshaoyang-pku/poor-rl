@@ -1,0 +1,2 @@
+{"time_hours": 0.08333, "env_steps": 2471138, "grad_steps": 19, "mean": 2211.84064665127, "p25": null, "median": null, "p75": null, "p90": 3310.0, "max": 8231.0, "eps_mean": null, "moves_mean": 235.03605751322357, "episodes": 26846, "actors": null}
+{"time_hours": 0.25, "env_steps": 8962050, "grad_steps": 68, "mean": 2223.4657067240837, "p25": null, "median": null, "p75": null, "p90": 3339.0, "max": 8910.0, "eps_mean": null, "moves_mean": 235.6380029605706, "episodes": 22293, "actors": null}

@@ -33,8 +33,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from rlforge.report import parse_eval_history, parse_task_split, parse_trainer_log
+from rlforge.rl_trials import DQNTrialAdapter, TrialRegistry
+from rlforge.rl_panel import RL_PANEL_HTML
 
-_PROGRESS_RE = re.compile(r"(\d+)/(\d+) \[")
+_PROGRESS_RE = re.compile(r"(?:^|[\r\n])([^\r\n]*?)(\d+)/(\d+)\s+\[")
 _LIVE_WINDOW_S = 600  # trainer log touched within 10 min -> run counts as live
 
 
@@ -93,6 +95,10 @@ class State:
         self.min_steps = args.min_steps
         self._specs = {}
         self._cache = {}  # (run_name, key) -> (mtime, value)
+        self.trials = TrialRegistry()
+        self.has_rl_panel = bool(getattr(args, "rl_data_root", None))
+        if self.has_rl_panel:
+            self.trials.register(DQNTrialAdapter(args.rl_data_root, getattr(args, "rl_ledger", None)))
         if args.run:
             spec = RunSpec(Path(args.run).name, args.run, args.trainer_log,
                            args.eval_history, args.base_eval)
@@ -143,9 +149,17 @@ class State:
         if spec.trainer_log and spec.trainer_log.exists():
             try:
                 tail = spec.trainer_log.read_bytes()[-262144:].decode(errors="replace")
-                prog = _PROGRESS_RE.findall(tail)
-                if prog:
-                    cur, total = int(prog[-1][0]), int(prog[-1][1])
+                progress = []
+                for match in _PROGRESS_RE.finditer(tail):
+                    line_prefix = match.group(1)
+                    if "Writing model shards:" in line_prefix:
+                        continue
+                    progress.append((int(match.group(2)), int(match.group(3))))
+                if progress:
+                    # Trainer logs end with a model-shard save progress bar (1/1),
+                    # which used to overwrite the real tqdm step (e.g. 500/500).
+                    # Select the last training bar, not the last arbitrary bar.
+                    cur, total = progress[-1]
             except OSError:
                 pass
         return cur, total
@@ -242,9 +256,13 @@ _HTML = """<!doctype html>
  header .dot.dead{background:#888}
  #runsel{background:#2c3949;color:#fff;border:1px solid #4a5a6e;border-radius:4px;padding:2px 6px;font-size:12.5px}
  #grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:10px;padding:12px}
- .panel{background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px}
+ .panel{background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px;position:relative;min-width:0}
+ .panel.wide{grid-column:1/-1}
  .panel h3{margin:2px 4px 6px;font-size:12.5px;color:#444;font-weight:600}
- canvas{width:100%;height:220px;display:block}
+ canvas{width:100%;height:260px;display:block;cursor:crosshair;touch-action:none}
+ .panel.wide canvas{height:340px}
+ .chart-tip{display:none;position:absolute;z-index:5;pointer-events:none;background:rgba(25,31,40,.95);color:#fff;border-radius:5px;padding:7px 9px;font:11px/1.55 ui-monospace,monospace;white-space:nowrap;box-shadow:0 2px 8px #0003}
+ .chart-tip b{font:600 11px -apple-system,sans-serif;display:block;margin-bottom:2px}
  #notes{margin:0 12px 16px;background:#fff;border:1px solid #ddd;border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.55;display:none}
  #notes h3{margin:0 0 6px;font-size:13px;color:#333}
  #notes pre{background:#f5f5f5;padding:8px;border-radius:4px;font-size:11px;overflow-x:auto}
@@ -259,18 +277,21 @@ const PALETTE = ['#1f77b4','#2ca02c','#d62728','#9467bd','#ff7f0e','#17becf','#8
 let colorIdx = 0; const colorFor = {};
 let currentRun = localStorage.getItem('rlforge_run') || null;
 function col(name){ if(!(name in colorFor)){ colorFor[name]=PALETTE[colorIdx++%PALETTE.length]; } return colorFor[name]; }
+function escapeHtml(value){ return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 function rolling(ys,w){ const out=[];let s=0;const q=[]; for(const y of ys){ if(y==null){out.push(null);continue;} q.push(y);s+=y; if(q.length>w)s-=q.shift(); out.push(s/q.length);} return out; }
-function panel(title){ const d=document.createElement('div'); d.className='panel'; const h=document.createElement('h3'); h.textContent=title; d.appendChild(h);
-  const c=document.createElement('canvas'); d.appendChild(c); document.getElementById('grid').appendChild(d); return c; }
+function panel(title, wide=false){ const d=document.createElement('div'); d.className='panel'+(wide?' wide':''); const h=document.createElement('h3'); h.textContent=title; d.appendChild(h);
+  const c=document.createElement('canvas'); d.appendChild(c); const tip=document.createElement('div'); tip.className='chart-tip'; d.appendChild(tip);
+  document.getElementById('grid').appendChild(d); return c; }
 function draw(cv, cfg){
   const dpr = window.devicePixelRatio||1;
   const W = cv.clientWidth, H = cv.clientHeight;
   cv.width=W*dpr; cv.height=H*dpr;
-  const g = cv.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
-  const m={l:46,r:8,t:6,b:20}, pw=W-m.l-m.r, ph=H-m.t-m.b;
+  const g = cv.getContext('2d');
+  const m={l:54,r:12,t:22,b:28}, pw=W-m.l-m.r, ph=H-m.t-m.b;
   let xs=[], ys=[];
   for(const s of cfg.series){ xs=xs.concat(s.x); ys=ys.concat(s.y.filter(v=>v!=null)); }
-  if(!xs.length||!ys.length){ g.fillStyle='#999'; g.font='11px sans-serif'; g.fillText('no data yet', m.l+8, m.t+16); return; }
+  const tip=cv.parentElement.querySelector('.chart-tip');
+  if(!xs.length||!ys.length){ g.setTransform(dpr,0,0,dpr,0,0); g.fillStyle='#999'; g.font='11px sans-serif'; g.fillText('no data yet', m.l+8, m.t+16); return; }
   let xmin=Math.min(...xs), xmax=Math.max(...xs);
   let ymin=cfg.ymin!=null?cfg.ymin:Math.min(...ys), ymax=cfg.ymax!=null?cfg.ymax:Math.max(...ys);
   if(cfg.logy){ ymin=Math.log10(Math.max(ymin,1e-6)); ymax=Math.log10(Math.max(ymax,1e-6)); }
@@ -278,28 +299,59 @@ function draw(cv, cfg){
   const pad=(ymax-ymin)*0.06; if(cfg.ymin==null)ymin-=pad; if(cfg.ymax==null)ymax+=pad;
   const tx=v=>m.l+(xmax>xmin?(v-xmin)/(xmax-xmin):0.5)*pw;
   const ty=v=>{ if(cfg.logy)v=Math.log10(Math.max(v,1e-6)); return m.t+ph-(v-ymin)/(ymax-ymin)*ph; };
-  g.strokeStyle='#e6e6e6'; g.fillStyle='#888'; g.font='10px sans-serif'; g.lineWidth=1;
-  for(let i=0;i<=4;i++){ const yv=ymin+(ymax-ymin)*i/4, py=m.t+ph-ph*i/4;
-    g.beginPath(); g.moveTo(m.l,py); g.lineTo(m.l+pw,py); g.stroke();
-    const lab=cfg.logy?Math.pow(10,yv).toPrecision(2):yv.toPrecision(3);
-    g.fillText(lab, 4, py+3); }
-  for(let i=0;i<=5;i++){ const xv=xmin+(xmax-xmin)*i/5, px=tx(xv);
-    g.fillText(cfg.xfmt?cfg.xfmt(xv):xv.toFixed(0), px-8, H-6); }
-  for(const hl of (cfg.hlines||[])){ g.strokeStyle=hl.color; g.setLineDash([4,3]);
-    g.beginPath(); g.moveTo(m.l,ty(hl.y)); g.lineTo(m.l+pw,ty(hl.y)); g.stroke(); g.setLineDash([]); }
-  cfg.series.forEach((s,si)=>{
-    g.strokeStyle=s.color||col(s.name); g.lineWidth=s.thin?1:1.8; g.globalAlpha=s.alpha!=null?s.alpha:1;
-    g.beginPath(); let pen=false;
-    for(let i=0;i<s.x.length;i++){ const v=s.y[i]; if(v==null){pen=false;continue;}
-      const px=tx(s.x[i]), py=ty(v); if(!pen){g.moveTo(px,py);pen=true;} else g.lineTo(px,py); }
-    g.stroke();
-    if(s.dots){ g.fillStyle=s.color||col(s.name); for(let i=0;i<s.x.length;i++){ const v=s.y[i]; if(v==null)continue;
-      g.beginPath(); g.arc(tx(s.x[i]),ty(v),2.6,0,7); g.fill(); } }
-    g.globalAlpha=1;
-  });
-  g.font='10px sans-serif'; let lx=m.l+4;
-  for(const s of cfg.series){ g.fillStyle=s.color||col(s.name); g.fillRect(lx,m.t+2,8,3);
-    g.fillStyle='#555'; g.fillText(s.name, lx+11, m.t+7); lx+=11+g.measureText(s.name).width+14; }
+  function render(hoverX=null){
+    g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+    g.strokeStyle='#e6e9ee'; g.fillStyle='#78818d'; g.font='10px sans-serif'; g.lineWidth=1;
+    for(let i=0;i<=4;i++){ const yv=ymin+(ymax-ymin)*i/4, py=m.t+ph-ph*i/4;
+      g.beginPath(); g.moveTo(m.l,py); g.lineTo(m.l+pw,py); g.stroke();
+      const lab=cfg.logy?Number(Math.pow(10,yv).toPrecision(2)):Number(yv.toPrecision(3));
+      g.textAlign='right'; g.fillText(lab, m.l-8, py+3); }
+    for(let i=0;i<=5;i++){ const xv=xmin+(xmax-xmin)*i/5, px=tx(xv);
+      g.textAlign=i===0?'left':i===5?'right':'center';
+      g.fillText(cfg.xfmt?cfg.xfmt(xv):xv.toFixed(0), px, H-8); }
+    for(const hl of (cfg.hlines||[])){ g.strokeStyle=hl.color; g.setLineDash([4,3]);
+      g.beginPath(); g.moveTo(m.l,ty(hl.y)); g.lineTo(m.l+pw,ty(hl.y)); g.stroke(); g.setLineDash([]); }
+    cfg.series.forEach(s=>{
+      g.strokeStyle=s.color||col(s.name); g.lineWidth=s.thin?1:2; g.globalAlpha=s.alpha!=null?s.alpha:1;
+      g.beginPath(); let pen=false;
+      for(let i=0;i<s.x.length;i++){ const v=s.y[i]; if(v==null){pen=false;continue;}
+        const px=tx(s.x[i]), py=ty(v); if(!pen){g.moveTo(px,py);pen=true;} else g.lineTo(px,py); }
+      g.stroke();
+      if(s.dots){ g.fillStyle=s.color||col(s.name); for(let i=0;i<s.x.length;i++){ const v=s.y[i]; if(v==null)continue;
+        g.beginPath(); g.arc(tx(s.x[i]),ty(v),3,0,7); g.fill(); } }
+      g.globalAlpha=1;
+    });
+    if(hoverX!=null){
+      const px=tx(hoverX); g.strokeStyle='#596579'; g.lineWidth=1; g.setLineDash([3,3]);
+      g.beginPath(); g.moveTo(px,m.t); g.lineTo(px,m.t+ph); g.stroke(); g.setLineDash([]);
+      cfg.series.forEach(s=>{ let best=-1, dist=Infinity;
+        for(let i=0;i<s.x.length;i++){ if(s.y[i]==null)continue; const d=Math.abs(s.x[i]-hoverX); if(d<dist){best=i;dist=d;} }
+        if(best>=0){ g.fillStyle=s.color||col(s.name); g.beginPath(); g.arc(tx(s.x[best]),ty(s.y[best]),4,0,7); g.fill(); }
+      });
+    }
+    g.textAlign='left'; g.font='10px sans-serif'; let lx=m.l;
+    for(const s of cfg.series){ g.fillStyle=s.color||col(s.name); g.fillRect(lx,m.t-13,10,3);
+      g.fillStyle='#555'; g.fillText(s.name,lx+14,m.t-8); lx+=18+g.measureText(s.name).width+14; }
+  }
+  render();
+  cv.onmousemove=e=>{
+    const rect=cv.getBoundingClientRect(), x=e.clientX-rect.left;
+    if(x<m.l||x>m.l+pw){tip.style.display='none';render();return;}
+    const hoverX=xmin+(x-m.l)/pw*(xmax-xmin); render(hoverX);
+    const lines=cfg.series.map(s=>{
+      let best=-1,dist=Infinity;
+      for(let i=0;i<s.x.length;i++){if(s.y[i]==null)continue;const d=Math.abs(s.x[i]-hoverX);if(d<dist){best=i;dist=d;}}
+      return best<0?null:`<span style="color:${s.color||col(s.name)}">●</span> ${escapeHtml(s.name)}: <b>${Number(s.y[best]).toPrecision(5)}</b>`;
+    }).filter(Boolean);
+    const label=cfg.xfmt?cfg.xfmt(hoverX):hoverX.toFixed(2);
+    tip.innerHTML=`<b>${escapeHtml(cfg.xLabel||'step')} ${escapeHtml(label)}</b>${lines.join('<br>')}`;
+    tip.style.display='block';
+    const panelRect=cv.parentElement.getBoundingClientRect();
+    const tipLeft=Math.min(Math.max(8,e.clientX-panelRect.left+14),panelRect.width-tip.offsetWidth-8);
+    const tipTop=e.clientY-panelRect.top+12;
+    tip.style.left=tipLeft+'px'; tip.style.top=Math.min(tipTop,panelRect.height-tip.offsetHeight-8)+'px';
+  };
+  cv.onmouseleave=()=>{tip.style.display='none';render();};
 }
 function series(xs, ys, name, opts){ return Object.assign({x:xs, y:ys, name:name, color:col(name)}, opts||{}); }
 
@@ -335,9 +387,9 @@ async function refreshMetrics(){
   const S=d.steps, sx=S.map(r=>r.step);
   if(S.length){
     const rw=S.map(r=>r.reward);
-    draw(panel('reward per step (raw + 20-step mean)'), {series:[
+    draw(panel('reward per step (raw + 20-step mean)', true), {series:[
       series(sx, rw, 'reward', {thin:true, alpha:0.2}),
-      series(sx, rolling(rw,20), 'reward (smooth)')], ymin:-2.1, ymax:1.1});
+      series(sx, rolling(rw,20), 'reward (smooth)')], ymin:-2.1, ymax:1.1, xLabel:'step'});
     draw(panel('clip ratios: completion truncation & GSPO seq_clip_low'), {series:[
       series(sx, S.map(r=>r.trunc), 'truncation frac'),
       series(sx, S.map(r=>r.seq_clip_low), 'gspo seq_clip_low')],
@@ -407,7 +459,21 @@ tick(); setInterval(tick, 10000);
 def make_handler(state: State):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path.startswith("/api/metrics"):
+            if self.path.startswith("/api/rl/overview"):
+                body = json.dumps(state.trials.list_overview()).encode()
+                self._reply(200, body, "application/json")
+            elif self.path.startswith("/api/rl/trials"):
+                body = json.dumps([record.__dict__ for record in state.trials.list_trials()]).encode()
+                self._reply(200, body, "application/json")
+            elif self.path.startswith("/api/rl/trial"):
+                from urllib.parse import parse_qs, urlparse
+                query = parse_qs(urlparse(self.path).query)
+                trial_id = (query.get("id") or [""])[0]
+                trial = state.trials.get_trial(trial_id)
+                status = 200 if trial is not None else 404
+                body = json.dumps(trial or {"error": "trial not found"}).encode()
+                self._reply(status, body, "application/json")
+            elif self.path.startswith("/api/metrics"):
                 from urllib.parse import urlparse, parse_qs
                 q = parse_qs(urlparse(self.path).query)
                 name = (q.get("run") or [None])[0]
@@ -421,6 +487,8 @@ def make_handler(state: State):
                 self._reply(200, body, "application/json")
             elif self.path.startswith("/api/runs"):
                 self._reply(200, json.dumps(state.list_runs()).encode(), "application/json")
+            elif self.path in ("/", "/index.html") and state.has_rl_panel:
+                self._reply(200, RL_PANEL_HTML.encode(), "text/html; charset=utf-8")
             elif self.path in ("/", "/index.html"):
                 self._reply(200, _HTML.encode(), "text/html; charset=utf-8")
             else:
@@ -450,13 +518,17 @@ def main():
     ap.add_argument("--trainer-log", default=None)
     ap.add_argument("--eval-history", default=None)
     ap.add_argument("--base-eval", default=None)
+    ap.add_argument("--rl-data-root", default=None,
+                    help="root of algorithm-neutral RL trial data; enables the RL panel")
+    ap.add_argument("--rl-ledger", default=None,
+                    help="optional historical trial JSON ledger, default: <rl-data-root>/trials.json")
     ap.add_argument("--min-steps", type=int, default=50,
                     help="hide finished runs with fewer logged steps (short/aborted trials)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8871)
     args = ap.parse_args()
-    if not args.root and not args.run:
-        ap.error("either --root (multi-run trail) or --run (single run) is required")
+    if not args.root and not args.run and not args.rl_data_root:
+        ap.error("provide --root, --run, or --rl-data-root")
     state = State(args)
     srv = ThreadingHTTPServer((args.host, args.port), make_handler(state))
     print(f"[dashboard] http://{args.host}:{args.port} "

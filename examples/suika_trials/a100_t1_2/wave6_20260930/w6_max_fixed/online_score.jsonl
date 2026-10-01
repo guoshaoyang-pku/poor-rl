@@ -1,0 +1,1 @@
+{"time_hours": 0.08333, "env_steps": 1272883, "grad_steps": 11, "mean": 3144.4057455540355, "p25": null, "median": null, "p75": null, "p90": 4229.0, "max": 9460.0, "eps_mean": null, "moves_mean": 332.90218878248976, "episodes": 7310, "actors": null}
