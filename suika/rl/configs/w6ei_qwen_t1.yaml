@@ -1,0 +1,45 @@
+name: w6ei_qwen_t1
+arch: qwen
+model_path: /path/to/models/Qwen3.5-0.8B
+K: 128
+max_fruits: 80
+boundary: true
+obs_format: tokens
+T: 160
+n_text: 96
+max_len: 896
+lora_r: 64
+lora_alpha: 128
+head_dim: 512
+n_step: 3
+gamma: 1.0
+double: true
+mirror_aug: true
+reward_scale: 1.0
+tempo: false
+n_quant: 1
+# --- expert-iteration distill: soft one-hot labels on top-episode actions ---
+# qteach = one_hot(act)*6 -> centered softmax target p_act=0.76 at tau=1.
+# Ranking carried by the two listwise terms (same as BC v3.1).
+bc_lambda_pi: 1.0
+bc_lambda_qd: 0.0
+bc_lambda_td: 0.0
+bc_pi_tau: 1.0
+bc_qrank_tau: 1.0
+bc_lambda_qrank: 0.5
+bc_adv_norm: false
+bc_lambda_adv: 0.0
+# V target would be mean(qteach) ~ 0.047 (garbage) -> V head untouched
+bc_lambda_v: 0.0
+# --- learner: warm-start nudge, not a refit ---
+batch: 1024
+micro_bs: 8
+lr: 1.0e-4
+lora_lr: 3.0e-5
+lr_warmup: 20
+lr_floor_frac: 0.3
+weight_decay: 1.0e-5
+ema_tau: 0.003
+grad_budget: 400
+ckpt_keep: 2
+seed: 0

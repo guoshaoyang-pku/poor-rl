@@ -1,0 +1,55 @@
+name: w4_qwen_text
+arch: qwen
+model_path: /data/user/models/Qwen3.5-0.8B
+K: 128
+max_fruits: 80
+boundary: true
+obs_format: tokens
+T: 160
+n_text: 96
+max_len: 896
+lora_r: 64
+lora_alpha: 128
+head_dim: 512
+# --- RL recipe (fixed stack: n-step fix + gamma=1) ---
+n_step: 3
+gamma: 1.0
+double: true
+mirror_aug: true
+reward_scale: 1.0
+tempo: false
+n_quant: 1
+# --- learner ---
+batch: 1024
+# micro 8: activations measured ~2.55MB/(sample*token) and HF gradient
+# checkpointing does NOT reduce them for this hybrid GDN arch (23.7G peak
+# even at micro16x512, all ckpt orderings; ckpt-before-peft is 13x slower
+# for zero memory win). micro8 -> 24.5G worst-case (896 bucket), ~14G typical.
+micro_bs: 8
+lr: 3.0e-4
+lora_lr: 1.0e-4
+lr_warmup: 500
+lr_floor_frac: 0.1
+weight_decay: 1.0e-5
+ema_tau: 0.003
+per_alpha: 0.6
+per_beta0: 0.4
+per_beta_grad_steps: 2000000
+replay_capacity: 2000000
+min_replay: 50000
+max_reuse: 8
+grad_budget: 20000
+publish_every: 200
+ckpt_interval_s: 1800
+ckpt_keep: 4
+seed: 0
+# --- actors ---
+eps_min: 0.02
+eps_max: 0.5
+actor_shard: 4096
+# --- placement (node_d; wave3b mlp on gpu0-2, egodex job gpu4-5,
+#     free: 3,6,7 -> 2 DDP learners + 1 infer GPU shared with evaluator) ---
+infer: server
+learner_gpus: [3, 6]
+infer_gpus: [7]
+evaluator_gpu: 7

@@ -1,0 +1,65 @@
+name: w5_rl_qwen_perm
+arch: qwen
+model_path: /data/user/models/Qwen3.5-0.8B
+# v4: warm start from the latest RL ckpt (not the c1 EI ckpt -- its Q head was
+# destroyed by one-hot distillation; c1 lesson)
+init_from: /data/user/suika-dqn/runs/w5rl_20261001/rl_latest_trainable.pt
+K: 128
+max_fruits: 80
+boundary: true
+obs_format: tokens
+T: 160
+n_text: 96
+max_len: 896
+lora_r: 64
+lora_alpha: 128
+head_dim: 512
+# --- RL recipe (fixed stack: n-step fix + gamma=1) ---
+n_step: 3
+gamma: 1.0
+double: true
+mirror_aug: true
+reward_scale: 1.0
+tempo: false
+n_quant: 1
+q_target_max: 8000
+# teacher anchor: dedicated swap file, hot-swapped in-place by the EI cycle
+# (learner polls mtime every 25 grad steps)
+anchor_from: /data/user/suika-dqn/runs/w5rl_20261001/anchor_teacher.pt
+anchor_lambda: 1.0
+anchor_lambda_end: 0.3
+anchor_decay_steps: 4000
+anchor_tau: 1.0
+# --- learner ---
+batch: 1024
+micro_bs: 8
+lr: 1.5e-4
+lora_lr: 5.0e-5
+lr_warmup: 100
+lr_floor_frac: 0.1
+weight_decay: 1.0e-5
+ema_tau: 0.001
+per_alpha: 0.6
+per_beta0: 0.4
+per_beta_grad_steps: 2000000
+replay_capacity: 2000000
+min_replay: 30000
+max_reuse: 8
+grad_budget: 20000
+publish_every: 100
+ckpt_interval_s: 900
+ckpt_keep: 8
+seed: 0
+# --- actors ---
+# pi head deploys better than Q argmax (64-seed: 1941.9 vs 1724 @gs2000);
+# AlphaZero-style actor head, Q stays the TD-trained critic
+actor_decode: pi
+eval_decode: pi
+eps_min: 0.02
+eps_max: 0.2
+actor_shard: 4096
+# --- placement ---
+infer: server
+learner_gpus: [0, 1, 2, 3]
+infer_gpus: [4, 5, 6]
+evaluator_gpu: 7

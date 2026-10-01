@@ -1,0 +1,80 @@
+K: 128
+T: 160
+actor_shard: 4096
+arch: settf
+attn_impl: sdpa
+batch: 32768
+boundary: true
+d_lat: 512
+d_tok: 128
+double: true
+ema_tau: 0.001
+eps_max: 0.5
+eps_min: 0.02
+eval_max_moves: 3000
+gamma: 1.0
+geo_dim: 3
+geo_lr_mult: 10
+grad_accum: 32
+grad_ckpt: false
+head_dim: 512
+hidden:
+- 1024
+- 1024
+infer: server
+init_from: /data/shared/suika-dqn/runs/wave6_20260930/seed_xl_stage24.pt
+log_actions: true
+lr: 0.0002
+lr_floor_frac: 0.25
+lr_warmup: 300
+max_fruits: 80
+max_reuse: 16.0
+min_replay: 50000
+mirror_aug: true
+n_lat: 64
+n_quant: 1
+n_step: 3
+obs_dim: 803
+obs_format: tokens
+per_alpha: 0.6
+per_beta0: 0.4
+q_target_max: 8000
+replay_capacity: 8000000
+reward_scale: 1.0
+stage1: 2
+stage3: 24
+tempo: false
+tf_heads: 8
+torch_compile: false
+weight_decay: 1.0e-05
+ckpt_interval_steps: 100
+ckpt_keep: 6
+eval_grid:
+- [400, 500]
+- [400, 610]
+- [400, 720]
+- [475, 500]
+- [475, 610]
+- [475, 720]
+- [550, 500]
+- [550, 610]
+- [550, 720]
+eval_grid_seeds: 4
+geometry:
+  width: [400, 550]
+  height: [500, 720]
+grad_budget: 20000
+infer_gpus:
+- 1
+- 2
+- 3
+- 4
+- 5
+- 6
+name: w6_var_xl
+per_beta_grad_steps: 20000
+resume_from_dir: /data/shared/suika-dqn/runs/wave6_20260930/w6_var_xl
+seed: 106
+sdp_backends:
+- mem_efficient
+- math

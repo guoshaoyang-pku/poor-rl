@@ -1,0 +1,49 @@
+name: w4_bc_qwen
+arch: qwen
+model_path: /path/to/models/Qwen3.5-0.8B
+K: 128
+max_fruits: 80
+boundary: true
+obs_format: tokens
+T: 160
+n_text: 96
+max_len: 896
+lora_r: 64
+lora_alpha: 128
+head_dim: 512
+# --- RL recipe kept identical to w4_qwen_text so the BC ckpt warm-starts it ---
+n_step: 3
+gamma: 1.0
+double: true
+mirror_aug: true
+reward_scale: 1.0
+tempo: false
+n_quant: 1
+# --- BC losses: CE(pi|argmax samples) + 128-vector Q distill + 0.5*TD ---
+bc_lambda_pi: 1.0
+bc_lambda_qd: 1.0
+bc_lambda_td: 0.5
+# --- learner (torchrun 8 ranks; batch is global, each rank gets batch/world) ---
+batch: 1024
+# micro 8: activations measured ~2.55MB/(sample*token) and HF gradient
+# checkpointing does NOT reduce them for this hybrid GDN arch; micro8 ->
+# 24.5G worst-case (896 bucket), ~14G typical.
+micro_bs: 8
+lr: 3.0e-4
+lora_lr: 1.0e-4
+lr_warmup: 200
+lr_floor_frac: 0.1
+weight_decay: 1.0e-5
+ema_tau: 0.003
+# 12000 * 1024 = 12.3M samples vs 14.4M transitions in the 24-actor subset
+grad_budget: 12000
+ckpt_keep: 4
+seed: 0
+# --- actors / placement: unused by bc_learner_qwen, kept for the RL arm ---
+eps_min: 0.02
+eps_max: 0.5
+actor_shard: 4096
+infer: server
+learner_gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+infer_gpus: [0]
+evaluator_gpu: 0

@@ -1,0 +1,61 @@
+name: sft_qwen_perm
+arch: qwen
+model_path: /data/user/models/Qwen3.5-0.8B
+K: 128
+max_fruits: 80
+boundary: true
+obs_format: tokens
+T: 160
+n_text: 96
+max_len: 896
+lora_r: 64
+lora_alpha: 128
+head_dim: 512
+mirror_aug: true
+# --- SFT stage 1 of the LLM arm (user spec 2026-09-29) ------------------------
+# The policy IS the token distribution. All 128 canonical answers tokenize to
+# exactly ['0'=15, '.'=13, d1, d2, d3] as single tokens (digits '0'..'9' =
+# ids 15..24), so "token 概率 = Q 的某种正规化" can be pushed onto exactly the
+# tokens the model emits:
+#   P(a) = softmax((q_T(a) - mean_a q_T)/tau)
+#   pos-d1 <- marginal of P over d1 (all 128 actions contribute)
+#   pos-d2/d3 <- conditional of P along the mode path (teacher forcing -> one
+#                trunk forward per state)
+# Soft target now ("后训练的时候再按照需求来尖锐化" = PPO stage); hard argmax
+# labels are unattainable on this teacher (top1-top2 gap ~1 Q unit, measured).
+sft_tau: 1.0
+sft_lambda_fmt: 0.5      # hard full-vocab CE on '0', '.', EOS (format must parse)
+sft_lambda_d1: 1.0
+sft_lambda_d2: 1.0
+sft_lambda_d3: 1.0
+sft_lambda_v: 1.0        # shared-backbone value = teacher Q level / 1000
+sft_lambda_pi: 0.2       # aux KD on the pi head (keeps the head policy + DDP)
+sft_lambda_qrank: 0.2    # aux listwise on the Q head (raw material for critic)
+sft_v_ref: 1000.0
+bc_qrank_tau: 1.0
+# --- learner (torchrun 8 ranks; batch is global, each rank gets batch/world) ---
+batch: 1024
+# micro 8: activations ~2.55MB/(sample*token) and HF gradient checkpointing does
+# NOT reduce them for this hybrid GDN arch (measured); micro8 -> 24.5G worst
+# case (896 bucket), ~14G typical.
+micro_bs: 8
+lr: 3.0e-4
+lora_lr: 1.0e-4
+lr_warmup: 100
+lr_floor_frac: 0.1
+weight_decay: 1.0e-5
+grad_clip: 1.0
+# node_d placement: only gpu4/5 are free -> 2 ranks (NPROC=2), so
+# step time ~4x the 8-rank figure; data-dir = runs/bc_data_20260929/inbox
+# (the full 28.9M-transition set, local). Budget is passed via BUDGET=.
+grad_budget: 1000
+ckpt_keep: 3
+seed: 0
+# --- actors / placement: unused by sft_qwen, kept for the RL arm ---
+eps_min: 0.02
+eps_max: 0.5
+actor_shard: 4096
+infer: server
+learner_gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+infer_gpus: [0]
+evaluator_gpu: 0

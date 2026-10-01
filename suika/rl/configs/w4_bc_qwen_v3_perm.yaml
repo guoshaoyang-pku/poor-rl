@@ -1,0 +1,85 @@
+name: w4_bc_qwen_v3_perm
+arch: qwen
+model_path: /data/user/models/Qwen3.5-0.8B
+K: 128
+max_fruits: 80
+boundary: true
+obs_format: tokens
+T: 160
+n_text: 96
+max_len: 896
+lora_r: 64
+lora_alpha: 128
+head_dim: 512
+# --- RL recipe kept identical to w4_qwen_text so the BC ckpt warm-starts it ---
+n_step: 3
+gamma: 1.0
+double: true
+mirror_aug: true
+reward_scale: 1.0
+tempo: false
+n_quant: 1
+# --- v3: normalized dueling split (arch/learner knobs identical to v2) ------
+#
+# Evidence for the change (BC v2.0/v2.1, steps 400-1050): val_qd fell
+# 437->97->53->43 (the teacher's Q *level*, range 0-2064) while q_regret sat
+# at the constant-policy baseline (28.7-29.1 vs 30.4; gate < 10) and the 16-seed
+# eval stayed in the random band (523.9/546.8). probe_bc_features.py (step 800)
+# showed why: the optimal LINEAR readout of the very features the heads consume
+# scores regret 23.5, no better than a ridge on the raw 800d board input (22.5),
+# while the model's own heads score 29 -> the trunk/heads learned the state
+# scalar, not the action ranking (per-state contrast is only ~12.4 units with
+# top1-top2 gaps of ~1). Raw-scale losses explain it: l_qd ~44 and l_td ~42 vs
+# a bounded soft-CE gradient -> ~99% of the gradient went to the state scalar.
+# Mirror aug was audited and is NOT broken (audit_mirror_headroom.py: mirror
+# ->orig transfer 23.4 vs 22.5 reference, self-consistent on its own val).
+#
+# v3 therefore supervises the dueling parts separately, in scale-free units
+# (q = v + a - mean(a) => mean_a q == v, q - mean_a q == a - mean(a)):
+#   L_v     = smooth_l1(v/1000, level/1000)                    [easy scalar]
+#   L_adv   = smooth_l1(c/12, (q_T-level)/12)                  [all the ranking]
+#   L_pi    = CE(softmax((q_T-level)/1.0), log_softmax(pi))    [KD, tau=1]
+#   L_qrank = 0.5*CE(softmax(c/1), log_softmax(c_pred/1))      [listwise]
+# raw-scale qd and TD are OFF -- they were the level sink; the RL warm start
+# re-fits both (v3 keeps the level supervised through L_v).
+bc_lambda_pi: 1.0
+bc_lambda_qd: 0.0
+bc_lambda_td: 0.0
+bc_pi_tau: 1.0
+bc_qrank_tau: 1.0
+bc_lambda_qrank: 0.5
+bc_adv_norm: true
+# L_adv off: with any FIXED divisor the term is magnitude-dominated (global RMS
+# of the centred target is 37; zero predictor 0.962 vs perfect shape 0.937 =
+# 2.6% margin -- measured), so its gradient only shrinks the contrast and
+# fights the listwise terms. The learner now standardizes per state (shape is
+# then 100% of the term); the ranking is carried by the two listwise terms,
+# whose margin is large: CE floor = target entropy 1.59 vs a uniform student
+# ~4.85, i.e. ~3.3 nats of headroom.
+bc_lambda_adv: 0.0
+bc_lambda_v: 1.0
+bc_adv_ref: 12.0
+# --- learner (torchrun 8 ranks; batch is global, each rank gets batch/world) ---
+batch: 1024
+# micro 8: activations measured ~2.55MB/(sample*token) and HF gradient
+# checkpointing does NOT reduce them for this hybrid GDN arch; micro8 ->
+# 24.5G worst-case (896 bucket), ~14G typical.
+micro_bs: 8
+lr: 3.0e-4
+lora_lr: 1.0e-4
+lr_warmup: 200
+lr_floor_frac: 0.1
+weight_decay: 1.0e-5
+ema_tau: 0.003
+# 12000 * 1024 = 12.3M samples vs 14.4M transitions in the 24-actor subset
+grad_budget: 12000
+ckpt_keep: 4
+seed: 0
+# --- actors / placement: unused by bc_learner_qwen, kept for the RL arm ---
+eps_min: 0.02
+eps_max: 0.5
+actor_shard: 4096
+infer: server
+learner_gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+infer_gpus: [0]
+evaluator_gpu: 0

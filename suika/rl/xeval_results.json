@@ -1,0 +1,1730 @@
+[
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 0,
+  "score": 1503.0,
+  "moves": 155,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 1,
+  "score": 1510.0,
+  "moves": 151,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 2,
+  "score": 801.0,
+  "moves": 105,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 3,
+  "score": 1049.0,
+  "moves": 128,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 4,
+  "score": 1464.0,
+  "moves": 158,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 5,
+  "score": 1827.0,
+  "moves": 193,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 6,
+  "score": 1764.0,
+  "moves": 182,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 7,
+  "score": 1077.0,
+  "moves": 125,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 8,
+  "score": 672.0,
+  "moves": 108,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 9,
+  "score": 1033.0,
+  "moves": 123,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 10,
+  "score": 928.0,
+  "moves": 118,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 11,
+  "score": 962.0,
+  "moves": 124,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 12,
+  "score": 1420.0,
+  "moves": 137,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 13,
+  "score": 993.0,
+  "moves": 107,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 14,
+  "score": 1301.0,
+  "moves": 133,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 15,
+  "score": 1572.0,
+  "moves": 168,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 16,
+  "score": 951.0,
+  "moves": 115,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 17,
+  "score": 981.0,
+  "moves": 126,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 18,
+  "score": 1037.0,
+  "moves": 127,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 19,
+  "score": 1301.0,
+  "moves": 148,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 20,
+  "score": 1532.0,
+  "moves": 178,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 21,
+  "score": 2274.0,
+  "moves": 225,
+  "maxfruit": 10,
+  "watermelons": 1
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 22,
+  "score": 1710.0,
+  "moves": 180,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 23,
+  "score": 1040.0,
+  "moves": 141,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 24,
+  "score": 1233.0,
+  "moves": 139,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 25,
+  "score": 1416.0,
+  "moves": 173,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 26,
+  "score": 1336.0,
+  "moves": 139,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 27,
+  "score": 1661.0,
+  "moves": 172,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 28,
+  "score": 1797.0,
+  "moves": 171,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 29,
+  "score": 1482.0,
+  "moves": 165,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 30,
+  "score": 1232.0,
+  "moves": 148,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "settle",
+  "seed": 31,
+  "score": 991.0,
+  "moves": 119,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 0,
+  "score": 1096.0,
+  "moves": 135,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 1,
+  "score": 1355.0,
+  "moves": 153,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 2,
+  "score": 1886.0,
+  "moves": 205,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 3,
+  "score": 1542.0,
+  "moves": 175,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 4,
+  "score": 1532.0,
+  "moves": 164,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 5,
+  "score": 1955.0,
+  "moves": 211,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 6,
+  "score": 1390.0,
+  "moves": 159,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 7,
+  "score": 1466.0,
+  "moves": 159,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 8,
+  "score": 1403.0,
+  "moves": 166,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 9,
+  "score": 1940.0,
+  "moves": 198,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 10,
+  "score": 1802.0,
+  "moves": 194,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 11,
+  "score": 1667.0,
+  "moves": 179,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 12,
+  "score": 1335.0,
+  "moves": 140,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 13,
+  "score": 1688.0,
+  "moves": 168,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 14,
+  "score": 916.0,
+  "moves": 116,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 15,
+  "score": 1885.0,
+  "moves": 194,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 16,
+  "score": 1436.0,
+  "moves": 157,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 17,
+  "score": 1480.0,
+  "moves": 184,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 18,
+  "score": 1763.0,
+  "moves": 185,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 19,
+  "score": 1306.0,
+  "moves": 152,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 20,
+  "score": 1283.0,
+  "moves": 160,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 21,
+  "score": 2175.0,
+  "moves": 212,
+  "maxfruit": 10,
+  "watermelons": 1
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 22,
+  "score": 2013.0,
+  "moves": 214,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 23,
+  "score": 2078.0,
+  "moves": 226,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 24,
+  "score": 1469.0,
+  "moves": 164,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 25,
+  "score": 2155.0,
+  "moves": 236,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 26,
+  "score": 1314.0,
+  "moves": 145,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 27,
+  "score": 1858.0,
+  "moves": 200,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 28,
+  "score": 1719.0,
+  "moves": 172,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 29,
+  "score": 1780.0,
+  "moves": 196,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 30,
+  "score": 1654.0,
+  "moves": 191,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w1",
+  "env": "tempo",
+  "seed": 31,
+  "score": 1547.0,
+  "moves": 168,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 0,
+  "score": 1860.0,
+  "moves": 185,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 1,
+  "score": 1318.0,
+  "moves": 141,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 2,
+  "score": 1685.0,
+  "moves": 177,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 3,
+  "score": 1161.0,
+  "moves": 139,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 4,
+  "score": 1398.0,
+  "moves": 140,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 5,
+  "score": 1366.0,
+  "moves": 152,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 6,
+  "score": 1189.0,
+  "moves": 138,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 7,
+  "score": 1143.0,
+  "moves": 130,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 8,
+  "score": 1057.0,
+  "moves": 137,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 9,
+  "score": 1458.0,
+  "moves": 155,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 10,
+  "score": 905.0,
+  "moves": 112,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 11,
+  "score": 1039.0,
+  "moves": 125,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 12,
+  "score": 1035.0,
+  "moves": 114,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 13,
+  "score": 1187.0,
+  "moves": 129,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 14,
+  "score": 1468.0,
+  "moves": 152,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 15,
+  "score": 1950.0,
+  "moves": 195,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 16,
+  "score": 1227.0,
+  "moves": 138,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 17,
+  "score": 1938.0,
+  "moves": 208,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 18,
+  "score": 1691.0,
+  "moves": 174,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 19,
+  "score": 1596.0,
+  "moves": 169,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 20,
+  "score": 1744.0,
+  "moves": 191,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 21,
+  "score": 1407.0,
+  "moves": 159,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 22,
+  "score": 1685.0,
+  "moves": 178,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 23,
+  "score": 1459.0,
+  "moves": 166,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 24,
+  "score": 1298.0,
+  "moves": 148,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 25,
+  "score": 1001.0,
+  "moves": 137,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 26,
+  "score": 858.0,
+  "moves": 108,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 27,
+  "score": 814.0,
+  "moves": 99,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 28,
+  "score": 1318.0,
+  "moves": 132,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 29,
+  "score": 1349.0,
+  "moves": 156,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 30,
+  "score": 1511.0,
+  "moves": 176,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "settle",
+  "seed": 31,
+  "score": 1152.0,
+  "moves": 134,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 0,
+  "score": 2139.0,
+  "moves": 209,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 1,
+  "score": 1572.0,
+  "moves": 161,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 2,
+  "score": 1561.0,
+  "moves": 175,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 3,
+  "score": 1495.0,
+  "moves": 171,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 4,
+  "score": 1071.0,
+  "moves": 129,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 5,
+  "score": 1551.0,
+  "moves": 173,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 6,
+  "score": 2024.0,
+  "moves": 203,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 7,
+  "score": 1772.0,
+  "moves": 186,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 8,
+  "score": 1710.0,
+  "moves": 192,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 9,
+  "score": 1799.0,
+  "moves": 184,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 10,
+  "score": 1913.0,
+  "moves": 198,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 11,
+  "score": 1192.0,
+  "moves": 144,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 12,
+  "score": 1561.0,
+  "moves": 155,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 13,
+  "score": 1720.0,
+  "moves": 182,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 14,
+  "score": 2129.0,
+  "moves": 223,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 15,
+  "score": 1958.0,
+  "moves": 195,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 16,
+  "score": 1757.0,
+  "moves": 188,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 17,
+  "score": 1326.0,
+  "moves": 167,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 18,
+  "score": 1611.0,
+  "moves": 177,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 19,
+  "score": 1787.0,
+  "moves": 184,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 20,
+  "score": 1265.0,
+  "moves": 155,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 21,
+  "score": 1179.0,
+  "moves": 147,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 22,
+  "score": 1063.0,
+  "moves": 137,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 23,
+  "score": 1998.0,
+  "moves": 218,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 24,
+  "score": 2164.0,
+  "moves": 230,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 25,
+  "score": 1202.0,
+  "moves": 159,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 26,
+  "score": 1409.0,
+  "moves": 156,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 27,
+  "score": 2849.0,
+  "moves": 273,
+  "maxfruit": 10,
+  "watermelons": 1
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 28,
+  "score": 1511.0,
+  "moves": 154,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 29,
+  "score": 1325.0,
+  "moves": 164,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 30,
+  "score": 1370.0,
+  "moves": 172,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "ours:w2warm",
+  "env": "tempo",
+  "seed": 31,
+  "score": 1950.0,
+  "moves": 199,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 0,
+  "score": 446.0,
+  "moves": 62,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 1,
+  "score": 743.0,
+  "moves": 95,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 2,
+  "score": 589.0,
+  "moves": 68,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 3,
+  "score": 596.0,
+  "moves": 82,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 4,
+  "score": 364.0,
+  "moves": 53,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 5,
+  "score": 663.0,
+  "moves": 94,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 6,
+  "score": 374.0,
+  "moves": 52,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 7,
+  "score": 686.0,
+  "moves": 77,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 8,
+  "score": 476.0,
+  "moves": 77,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 9,
+  "score": 481.0,
+  "moves": 54,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 10,
+  "score": 442.0,
+  "moves": 65,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 11,
+  "score": 689.0,
+  "moves": 87,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 12,
+  "score": 630.0,
+  "moves": 82,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 13,
+  "score": 300.0,
+  "moves": 46,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 14,
+  "score": 812.0,
+  "moves": 94,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 15,
+  "score": 759.0,
+  "moves": 89,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 16,
+  "score": 355.0,
+  "moves": 55,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 17,
+  "score": 300.0,
+  "moves": 55,
+  "maxfruit": 6,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 18,
+  "score": 591.0,
+  "moves": 68,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 19,
+  "score": 856.0,
+  "moves": 109,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 20,
+  "score": 913.0,
+  "moves": 115,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 21,
+  "score": 542.0,
+  "moves": 73,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 22,
+  "score": 594.0,
+  "moves": 86,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 23,
+  "score": 938.0,
+  "moves": 126,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 24,
+  "score": 608.0,
+  "moves": 80,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 25,
+  "score": 491.0,
+  "moves": 84,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 26,
+  "score": 470.0,
+  "moves": 58,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 27,
+  "score": 465.0,
+  "moves": 65,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 28,
+  "score": 500.0,
+  "moves": 64,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 29,
+  "score": 852.0,
+  "moves": 112,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 30,
+  "score": 880.0,
+  "moves": 111,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "settle",
+  "seed": 31,
+  "score": 566.0,
+  "moves": 73,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 0,
+  "score": 1791.0,
+  "moves": 181,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 1,
+  "score": 1223.0,
+  "moves": 127,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 2,
+  "score": 1742.0,
+  "moves": 185,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 3,
+  "score": 1391.0,
+  "moves": 147,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 4,
+  "score": 785.0,
+  "moves": 92,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 5,
+  "score": 1437.0,
+  "moves": 157,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 6,
+  "score": 678.0,
+  "moves": 81,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 7,
+  "score": 1431.0,
+  "moves": 149,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 8,
+  "score": 1206.0,
+  "moves": 147,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 9,
+  "score": 685.0,
+  "moves": 76,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 10,
+  "score": 857.0,
+  "moves": 100,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 11,
+  "score": 1080.0,
+  "moves": 128,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 12,
+  "score": 929.0,
+  "moves": 108,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 13,
+  "score": 1070.0,
+  "moves": 118,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 14,
+  "score": 998.0,
+  "moves": 120,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 15,
+  "score": 601.0,
+  "moves": 83,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 16,
+  "score": 1282.0,
+  "moves": 143,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 17,
+  "score": 1486.0,
+  "moves": 170,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 18,
+  "score": 717.0,
+  "moves": 86,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 19,
+  "score": 996.0,
+  "moves": 122,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 20,
+  "score": 1228.0,
+  "moves": 142,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 21,
+  "score": 915.0,
+  "moves": 114,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 22,
+  "score": 1226.0,
+  "moves": 145,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 23,
+  "score": 1487.0,
+  "moves": 174,
+  "maxfruit": 9,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 24,
+  "score": 846.0,
+  "moves": 104,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 25,
+  "score": 1128.0,
+  "moves": 147,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 26,
+  "score": 542.0,
+  "moves": 71,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 27,
+  "score": 441.0,
+  "moves": 63,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 28,
+  "score": 306.0,
+  "moves": 56,
+  "maxfruit": 6,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 29,
+  "score": 947.0,
+  "moves": 118,
+  "maxfruit": 8,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 30,
+  "score": 666.0,
+  "moves": 96,
+  "maxfruit": 7,
+  "watermelons": 0
+ },
+ {
+  "policy": "theirs",
+  "env": "tempo",
+  "seed": 31,
+  "score": 1021.0,
+  "moves": 124,
+  "maxfruit": 8,
+  "watermelons": 0
+ }
+]

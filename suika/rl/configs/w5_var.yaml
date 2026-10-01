@@ -1,0 +1,88 @@
+K: 128
+T: 160
+actor_shard: 4096
+arch: settf
+attn_impl: sdpa
+batch: 32768
+boundary: true
+ckpt_interval_s: 900
+ckpt_keep: 4
+d_lat: 512
+d_tok: 128
+double: true
+ema_tau: 0.003
+eps_max: 0.5
+eps_min: 0.02
+eval_grid:
+- - 352
+  - 170
+- - 448
+  - 170
+- - 544
+  - 170
+- - 352
+  - 210
+- - 448
+  - 210
+- - 544
+  - 210
+- - 352
+  - 250
+- - 448
+  - 250
+- - 544
+  - 250
+eval_grid_seeds: 4
+eval_max_moves: 1500
+gamma: 1.0
+geo_dim: 3
+geometry:
+  killy:
+  - 170
+  - 250
+  width:
+  - 352
+  - 544
+grad_accum: 32
+grad_budget: 8000
+grad_ckpt: false
+head_dim: 512
+hidden:
+- 1024
+- 1024
+infer: server
+infer_gpus:
+- 1
+- 2
+- 3
+- 4
+- 5
+- 6
+init_from: /path/to/suika-dqn/runs/wave5_20260929/seed_w4_k200_cont.pt
+log_actions: true
+lr: 0.0002
+lr_floor_frac: 0.25
+lr_warmup: 300
+max_fruits: 80
+max_reuse: 16.0
+min_replay: 50000
+mirror_aug: true
+n_lat: 64
+n_quant: 1
+n_step: 3
+name: w5_var
+obs_dim: 803
+obs_format: tokens
+per_alpha: 0.6
+per_beta0: 0.4
+per_beta_grad_steps: 8000
+replay_capacity: 8000000
+resume_from_dir: /path/to/suika-dqn/runs/wave5_20260929/w5_var
+reward_scale: 1.0
+seed: 6
+stage1: 2
+stage3: 16
+tempo: false
+tf_heads: 8
+torch_compile: true
+weight_decay: 1.0e-05

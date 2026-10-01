@@ -1,0 +1,65 @@
+name: w5_rl_qwen_perm
+arch: qwen
+model_path: /data/user/models/Qwen3.5-0.8B
+# warm start: BC v3 continuation latest (q_regret 6.44, agree_pi 0.40)
+init_from: /data/user/suika-dqn/runs/w4bc_bc/v3_perm/checkpoints/step7800.pt
+K: 128
+max_fruits: 80
+boundary: true
+obs_format: tokens
+T: 160
+n_text: 96
+max_len: 896
+lora_r: 64
+lora_alpha: 128
+head_dim: 512
+# --- RL recipe (fixed stack: n-step fix + gamma=1) ---
+n_step: 3
+gamma: 1.0
+double: true
+mirror_aug: true
+reward_scale: 1.0
+tempo: false
+n_quant: 1
+# anti-divergence insurance (wave5 lesson): clip bootstrap target
+q_target_max: 8000
+# teacher warmup (user design): frozen BC teacher listwise soft-KD anchor
+# preserves BC action ranking while TD recalibrates values; decays 1.0->0.3
+anchor_from: /data/user/suika-dqn/runs/w4bc_bc/v3_perm/checkpoints/step7800.pt
+anchor_lambda: 1.0
+anchor_lambda_end: 0.3
+anchor_decay_steps: 4000
+anchor_tau: 1.0
+# --- learner ---
+batch: 1024
+micro_bs: 8
+# warm-started: lower than scratch (3e-4/1e-4) so BC features are not washed
+lr: 1.5e-4
+lora_lr: 5.0e-5
+lr_warmup: 100
+lr_floor_frac: 0.1
+weight_decay: 1.0e-5
+# slower target tracking than w4 (0.003) — gamma=1 bootstrap stability
+ema_tau: 0.001
+per_alpha: 0.6
+per_beta0: 0.4
+per_beta_grad_steps: 2000000
+replay_capacity: 2000000
+min_replay: 30000
+max_reuse: 8
+grad_budget: 20000
+publish_every: 100
+ckpt_interval_s: 900
+ckpt_keep: 8
+seed: 0
+# --- actors ---
+eps_min: 0.02
+# v1 lesson: eps_max 0.5 poisoned replay (eval 1627->924 in 200 steps);
+# cap exploration so the BC policy's own distribution dominates
+eps_max: 0.2
+actor_shard: 4096
+# --- placement (node_d, 8xA100 free: 4 DDP learners + 3 infer + eval) ---
+infer: server
+learner_gpus: [0, 1, 2, 3]
+infer_gpus: [4, 5, 6]
+evaluator_gpu: 7

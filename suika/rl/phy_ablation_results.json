@@ -1,0 +1,42 @@
+[
+ {
+  "name": "base",
+  "score_mean": 580.5,
+  "score_std": 207.3,
+  "moves_mean": 78.9,
+  "frames_per_drop": 124.3,
+  "ms_per_frame": 0.023,
+  "ms_per_drop": 2.94,
+  "drops_per_s_per_core": 340.2,
+  "max_overlap_max": 27.31,
+  "max_overlap_mean": 17.27,
+  "max_vel_max": 366.4,
+  "nan": false,
+  "escapes": 0,
+  "bit_exact_with_base": true,
+  "score_path_l1_vs_base": 0.0,
+  "final_type_l1_vs_base": 0.0,
+  "final_pos_meandist_vs_base": 0.0,
+  "wall_s_total": 7.0
+ },
+ {
+  "name": "fast",
+  "score_mean": 580.5,
+  "score_std": 207.3,
+  "moves_mean": 78.9,
+  "frames_per_drop": 124.3,
+  "ms_per_frame": 0.012,
+  "ms_per_drop": 1.6,
+  "drops_per_s_per_core": 626.3,
+  "max_overlap_max": 27.31,
+  "max_overlap_mean": 17.27,
+  "max_vel_max": 366.4,
+  "nan": false,
+  "escapes": 0,
+  "bit_exact_with_base": true,
+  "score_path_l1_vs_base": 0.0,
+  "final_type_l1_vs_base": 0.0,
+  "final_pos_meandist_vs_base": 0.0,
+  "wall_s_total": 3.8
+ }
+]

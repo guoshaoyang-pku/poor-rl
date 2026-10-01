@@ -1,0 +1,27 @@
+name: w6_bc_qwen_vit_t1
+arch: qwen_vit
+model_path: /path/to/models/Qwen3.5-0.8B
+K: 128
+freeze_visual: true        # BC stage 1: ViT+merger frozen, LM side learns
+lora_r: 64
+lora_alpha: 128
+head_dim: 512
+# --- v3.1 listwise recipe (proven on the text arm: regret 28.7 -> 7.75) ----
+bc_lambda_pi: 1.0
+bc_pi_tau: 1.0
+bc_qrank_tau: 1.0
+bc_lambda_qrank: 0.5
+bc_lambda_v: 1.0
+# --- learner ---------------------------------------------------------------
+batch: 1024
+# vision seq = 117 image tokens (vs 896 text): activations are ~7x smaller,
+# micro 32 is conservative on a 40G card with the ViT under no_grad.
+micro_bs: 32
+lr: 3.0e-4
+lora_lr: 1.0e-4
+lr_warmup: 200
+lr_floor_frac: 0.1
+weight_decay: 1.0e-5
+grad_budget: 12000
+ckpt_keep: 4
+seed: 0
