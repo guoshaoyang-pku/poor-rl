@@ -1,0 +1,3 @@
+{"time_hours": 0.08333, "env_steps": 3727772, "grad_steps": 1103, "mean": 1247.969540759325, "p25": null, "median": null, "p75": null, "p90": 1765.0, "max": 3258.0, "eps_mean": null, "moves_mean": 161.4461279131304, "episodes": 51019, "actors": null}
+{"time_hours": 0.25, "env_steps": 11878084, "grad_steps": 2520, "mean": 1432.6043266341724, "p25": null, "median": null, "p75": null, "p90": 1920.0, "max": 3417.0, "eps_mean": null, "moves_mean": 181.20653891522556, "episodes": 44931, "actors": null}
+{"time_hours": 0.41667, "env_steps": 19506358, "grad_steps": 3779, "mean": 1457.3331395348837, "p25": null, "median": null, "p75": null, "p90": 1956.0, "max": 3527.0, "eps_mean": null, "moves_mean": 183.7218023255814, "episodes": 13760, "actors": null}
