@@ -63,8 +63,58 @@ Hopper, but only via MXFP4 — and only as weight-only A16.**
 |---|---|---|
 | `fp_quant` | **no** | `get_min_capability() == 100`; hard Blackwell gate |
 | `nvfp4_per_token` | **no, and a no-op** | the online shorthand sets only `moe=QuantSpec(...)`; `linear` is left unquantized. The MoE method raises `ValueError` unless `is_device_capability_family(100)`. **On a dense model there are no MoE layers, so it quantizes nothing at all — which is why it starts with no error.** |
-| `modelopt_fp4` | no | needs a ModelOpt pre-quantized checkpoint; no usable impl file in this vLLM build |
+| `modelopt_fp4` | **yes for W4A16, needs a checkpoint** | the *checkpoint* is what is missing, not the hardware: there is no `Nvfp4OnlineLinearMethod`, so NVFP4 cannot be produced at load time, and `nvidia-modelopt` is not installed. With an NVFP4 checkpoint this resolves to `MarlinNvFp4LinearKernel`, which is supported here — see below. |
 | **online `mxfp4`** | **yes** | `Mxfp4OnlineLinearMethod` has **no arch gate**; it resolves to `MarlinMxFp4LinearKernel` (`is_fp4_marlin_supported()` = `is_cuda() and capability >= 75`) |
+
+### Correction: NVFP4 does *not* require a Blackwell card
+
+Two different things are easy to conflate, and an earlier revision of this note
+conflated them:
+
+- **Native FP4 tensor-core compute** requires Blackwell. In vLLM that is the
+  `pytorch` kernel (`is_device_capability_family(100)`), `flashinfer`
+  (`sm_100` / `sm_12x`), and `fp_quant`.
+- **NVFP4 weight-only (W4A16)** runs on **Hopper**. vLLM ships
+  `MarlinNvFp4LinearKernel`, gated only on
+  `is_fp4_marlin_supported()` = `is_cuda() and capability >= 75`.
+
+Measured on 360-1 (sm90): `is_fp4_marlin_supported()` returns **True**, and the
+kernel self-describes when used:
+
+> Your GPU does not have native support for FP4 computation but FP4 quantization
+> is being used. Weight-only FP4 compression will be used leveraging the Marlin
+> kernel. This may degrade performance for compute-heavy workloads.
+
+This is also how QeRL can claim "RL for 32B LLMs on a single H100 GPU" while using
+NVFP4: on Hopper the gain is **memory**, not 4-bit tensor-core throughput. That is
+consistent with our own measurement that weight format does not move decode
+throughput (bf16 -> MXFP4 = -1.5%).
+
+What actually blocks NVFP4 *for us* is the **checkpoint**, not the card: there is
+no `Nvfp4OnlineLinearMethod` (the online linear methods are fp8 x3, mxfp4, mxfp8
+only), and `nvidia-modelopt` is not installed, so we cannot produce one offline.
+Online MXFP4 is therefore the practical stand-in: same W4A16 memory win, differing
+only in scale format (E8M0 / block-32 vs E4M3 / block-16).
+
+### Multimodal checkpoints: exclude the vision tower
+
+MXFP4 quantizes in block-32 groups, so the input dim of every quantized 2-D weight
+must be divisible by 32. On Qwen3.8-27B the vision tower violates this: **27
+weights** of the form `model.visual.blocks.*.mlp.linear_fc2.weight` have shape
+`[1152, 4304]`, and 4304 % 32 = 16. Without an exclusion the server dies at init:
+
+```
+ValueError: MXFP4 requires input_size_per_partition (4304) to be divisible by 32.
+```
+
+Fix (online `ignore` accepts fnmatch patterns):
+
+```bash
+--quantization online \
+--quantization-config '{"linear": "mxfp4", "ignore": ["*visual*"]}'
+```
+
+The language backbone is unaffected, and that is the part RL trains.
 
 Working invocation (dense model):
 
@@ -110,6 +160,51 @@ Three conclusions:
    synthetic scale-0.05 adapter changed all 3/3 test prompts (sum-logprob
    -16.06 -> -41.78 etc.), so the adapter is genuinely applied on top of the
    quantized base.
+
+### 27B measurement: FP4 buys memory, it does not buy speed
+
+Measured on 360-2 (8xH200), Qwen3.8-27B, one GPU per config, `--max-model-len 8192`,
+`--gpu-memory-utilization 0.80`, `--kv-cache-dtype fp8`, 1024 in / 256 out:
+
+| metric | bf16 | MXFP4 | delta |
+|---|---:|---:|---:|
+| model load | 51.1 GiB | **18.29 GiB** | **-32.8 GiB (2.79x smaller)** |
+| KV memory | 58.57 GiB | **89.73 GiB** | **+53.2%** |
+| KV tokens | 835,584 | **1,280,000** | **+53.2%** |
+| max concurrency @8k | 102.0x | **156.25x** | **+53.2%** |
+| throughput @256 conc | **1,545.0 tok/s** | 941.0 tok/s | **0.61x** |
+
+| concurrency | 64 | 128 | 256 | 512 | 768 |
+|---|---:|---:|---:|---:|---:|
+| bf16 | 1,448.5 | 1,443.2 | **1,545.0** | 1,417.2 | 1,359.3 |
+| MXFP4 | **981.4** | 928.0 | 941.0 | 880.4 | 839.5 |
+
+**The +53% KV capacity never converts into throughput.** Even at 768 concurrency --
+past bf16's own capacity ceiling -- bf16 still wins 1,359 vs 839 tok/s. bf16 peaks at
+256 concurrency; MXFP4 peaks at the lowest concurrency tested.
+
+This is exactly what QeRL's claim means, and it is worth stating precisely: QeRL says
+a 32B model **fits on one H100**, which is a *feasibility* claim, not a *speed* claim.
+On Hopper, **FP4 converts compute into memory**. If the binding constraint is "the
+model does not fit", FP4 is the answer. If the binding constraint is rollout
+throughput -- which is our case, by a 1.54x deficit -- FP4 is the wrong trade.
+
+Only on Blackwell (native FP4 tensor cores via the `sm_100`/`sm_12x` kernels) could
+FP4 plausibly be both faster and smaller. These H200s cannot reach that path.
+
+### Operational gotcha: no nvcc, so disable the flashinfer sampler
+
+Neither 360-1 nor 360-2 has `nvcc` (`which nvcc` is empty, `/usr/local/cuda` does not
+exist). vLLM's default sampler JIT-compiles `top_k_top_p_sampling_from_logits` through
+`flashinfer`, so a 27B server dies during EngineCore init with:
+
+```
+RuntimeError: Could not find nvcc and default cuda_home='/usr/local/cuda' doesn't exist
+```
+
+Fix: `export VLLM_USE_FLASHINFER_SAMPLER=0` (uses the native PyTorch sampler). This is
+not 27B-specific and not quantization-specific -- it is a property of these images.
+Set it on both arms of any comparison so the sampler is held constant.
 
 ### Why FP4 training is still not a thing here
 
