@@ -5,6 +5,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -113,11 +114,54 @@ def hide_existing_runs(log_dir: Path, project: str, *names: str) -> int:
         connection.close()
 
 
+def delete_run(log_dir: Path, project: str, name: str) -> bool:
+    """Remove an experiment and every row that references it, plus its run directory."""
+    database = log_dir / "runs.swanlab"
+    if not database.exists():
+        return False
+    connection = sqlite3.connect(database)
+    try:
+        row = connection.execute(
+            "SELECT experiment.id, experiment.run_id FROM experiment "
+            "JOIN project ON project.id = experiment.project_id "
+            "WHERE project.name = ? AND experiment.name = ?",
+            (project, name),
+        ).fetchone()
+        if row is None:
+            return False
+        experiment_id, run_dir_name = row
+        chart_ids = [
+            r[0]
+            for r in connection.execute(
+                "SELECT id FROM chart WHERE experiment_id = ?", (experiment_id,)
+            )
+        ]
+        if chart_ids:
+            placeholders = ", ".join("?" for _ in chart_ids)
+            connection.execute(f"DELETE FROM source WHERE chart_id IN ({placeholders})", chart_ids)
+            connection.execute(f"DELETE FROM display WHERE chart_id IN ({placeholders})", chart_ids)
+        connection.execute("DELETE FROM chart WHERE experiment_id = ?", (experiment_id,))
+        connection.execute("DELETE FROM tag WHERE experiment_id = ?", (experiment_id,))
+        connection.execute("DELETE FROM namespace WHERE experiment_id = ?", (experiment_id,))
+        connection.execute("DELETE FROM experiment WHERE id = ?", (experiment_id,))
+        connection.commit()
+    finally:
+        connection.close()
+    if run_dir_name:
+        run_dir = log_dir / run_dir_name
+        if run_dir.is_dir():
+            shutil.rmtree(run_dir, ignore_errors=True)
+    return True
+
+
 def emit_run(*, log_dir: Path, project: str, name: str, group: str,
              description: str, config: dict[str, Any], tags: list[str],
-             metric_rows: list[tuple[int, dict[str, Any]]]) -> bool:
+             metric_rows: list[tuple[int, dict[str, Any]]], replace: bool = False,
+             live: bool = False) -> bool:
     if run_exists(log_dir, project, name):
-        return False
+        if not replace:
+            return False
+        delete_run(log_dir, project, name)
     import swanlab
 
     run = swanlab.init(
@@ -133,7 +177,8 @@ def emit_run(*, log_dir: Path, project: str, name: str, group: str,
         metrics = finite_metrics(values)
         if metrics:
             swanlab.log(metrics, step=step)
-    run.finish()
+    if not live:
+        run.finish()
     return True
 
 
@@ -224,7 +269,7 @@ def aiq_rows(record: dict[str, Any]) -> list[tuple[int, dict[str, Any]]]:
     return rows
 
 
-def import_aiq(data: dict[str, Any], log_dir: Path) -> int:
+def import_aiq(data: dict[str, Any], log_dir: Path, replace: bool = False) -> int:
     count = 0
     for run_name, record in data.get("aiq", {}).items():
         metadata = record.get("run", {})
@@ -236,6 +281,8 @@ def import_aiq(data: dict[str, Any], log_dir: Path) -> int:
             f"steps={len(record.get('steps', []))}; data={dataset.get('rows', 'unknown')} rows; "
             f"stop={status}. Reward is a dimensionless task score, not accuracy."
         )
+        if metadata.get("note"):
+            description += " " + metadata["note"]
         config = {
             "run_id": metadata.get("run_id", run_name),
             "status": status,
@@ -265,13 +312,16 @@ def import_aiq(data: dict[str, Any], log_dir: Path) -> int:
             "async_dp_v3full": "Full pool · 3,830 train / 300 held-out",
             "async_dp_flip450": "Data-flip · 450 train / 50 paired held-out",
             "async_dp_pool2134cap8k": "Historical pool · 8k prompt-cap run",
+            "async_dp_opus_corr_e178_userformula_step10_20261001": "Opus e178 · user-formula pool",
+            "async_dp_opus_corr_e178_userformula_step200_4plus4cps256_20261001": "Opus e178 · user-formula pool",
+            "async_dp_opus_corr_e178_userformula_step400_from_ckpt200_4plus4cps256_20261002": "Opus e178 · user-formula pool",
         }
         emitted = emit_run(
             log_dir=log_dir, project="AIQ", name=run_name,
             group=groups.get(run_name, "Historical AIQ"),
             description=description, config=config,
             tags=["aiq", "historical", str(config["algorithm"]).lower(), str(status)],
-            metric_rows=aiq_rows(record),
+            metric_rows=aiq_rows(record), replace=replace,
         )
         count += int(emitted)
     return count
@@ -381,7 +431,7 @@ def import_suika(root: Path, log_dir: Path, minimum_wall_hours: float,
             log_dir=log_dir, project="Suika", name=trial.name,
             group=trial.experiment or "Historical Suika", description=f"{trial.algorithm} · {source_id} · {duration:.2f} h",
             config=config, tags=["suika", "historical", str(trial.algorithm).lower(), str(trial.config.get("wave", ""))],
-            metric_rows=rows,
+            metric_rows=rows, live=trial.status == "live",
         )
         imported += int(emitted)
     return imported, excluded, preserved, hidden
@@ -563,6 +613,29 @@ def configure_local_sections(log_dir: Path) -> None:
         connection.close()
 
 
+def mark_live_runs(suika_root: Path, log_dir: Path) -> int:
+    """Post-process hook: swanlab's atexit finishes every open run when the
+    import process exits, so live trials must be flipped back to RUNNING in a
+    separate process after the import completes."""
+    import sqlite3
+
+    db = log_dir / "runs.swanlab"
+    if not db.is_file():
+        return 0
+    adapter = DQNTrialAdapter(suika_root)
+    live_names = [t.name for t in adapter.list_trials() if t.status == "live"]
+    if not live_names:
+        return 0
+    conn = sqlite3.connect(db)
+    try:
+        placeholders = ", ".join("?" for _ in live_names)
+        conn.execute(f"UPDATE experiment SET status = 0 WHERE name IN ({placeholders})", live_names)
+        conn.commit()
+    finally:
+        conn.close()
+    return len(live_names)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--history-json", type=Path, required=True)
@@ -571,6 +644,11 @@ def main() -> None:
     parser.add_argument("--minimum-suika-hours", type=float, default=4.0)
     parser.add_argument("--max-suika-points", type=int, default=800)
     parser.add_argument("--only", choices=("all", "aiq", "suika", "sft"), default="all")
+    parser.add_argument("--replace", action="store_true",
+                        help="re-import existing runs (AIQ only): delete and rebuild instead of skipping")
+    parser.add_argument("--mark-live", action="store_true",
+                        help="suika only: flip trials with fresh metrics back to RUNNING in the swanlab db "
+                             "(run in a separate process after the import, swanlab atexit finishes open runs)")
     args = parser.parse_args()
     if args.minimum_suika_hours < 0 or args.max_suika_points < 1:
         parser.error("--minimum-suika-hours must be non-negative and --max-suika-points must be positive")
@@ -587,6 +665,8 @@ def main() -> None:
                 "--max-suika-points", str(args.max_suika_points),
                 "--only", category,
             ]
+            if args.replace:
+                command.append("--replace")
             subprocess.run(command, check=True, env={
                 **os.environ,
                 "SWANLAB_MODE": "local",
@@ -604,9 +684,13 @@ def main() -> None:
     os.environ["SWANLAB_LOGDIR"] = str(log_dir)
     os.environ["SWANLAB_PROJ_NAME"] = PROJECTS[args.only]
     if args.only == "aiq":
-        count = import_aiq(data, log_dir)
+        count = import_aiq(data, log_dir, replace=args.replace)
         summary = {"project": "AIQ", "runs": count, "log_dir": str(log_dir)}
     elif args.only == "suika":
+        if args.mark_live:
+            mark_live_runs(args.suika_root, log_dir)
+            print(json.dumps({"project": "Suika", "mark_live": True, "log_dir": str(log_dir)}, ensure_ascii=False))
+            return
         count, excluded, preserved, hidden = import_suika(args.suika_root, log_dir, args.minimum_suika_hours, args.max_suika_points)
         summary = {
             "project": "Suika", "imported_runs": count, "preserved_existing_runs": len(preserved),

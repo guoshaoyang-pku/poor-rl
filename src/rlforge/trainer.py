@@ -23,6 +23,7 @@ from datasets import Dataset
 from trl.experimental.async_grpo import AsyncGRPOConfig, AsyncGRPOTrainer
 from trl.trainer.utils import nanmax, nanmin
 
+from rlforge.gspo import adaptive_clip_eps
 from rlforge.rewards import load_reward_fn
 
 class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
@@ -47,11 +48,24 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         in __init__ rather than in compute_loss so a sweep only touches the launcher.
     """
 
-    def __init__(self, *args, gspo_norm: str = "seq_mean", **kwargs):
+    def __init__(
+        self,
+        *args,
+        gspo_norm: str = "seq_mean",
+        adaptive_clip_low_max: float | None = None,
+        adaptive_clip_high_max: float | None = None,
+        gspo_eps_max: float = 0.1,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         if gspo_norm not in ("token", "seq_mean"):
             raise ValueError(f"unknown gspo_norm {gspo_norm!r}")
+        if (adaptive_clip_low_max is None) != (adaptive_clip_high_max is None):
+            raise ValueError("both adaptive clip-fraction caps must be set together")
         self._gspo_norm = gspo_norm
+        self._adaptive_clip_low_max = adaptive_clip_low_max
+        self._adaptive_clip_high_max = adaptive_clip_high_max
+        self._gspo_eps_max = gspo_eps_max
 
     def compute_loss(
         self, model, inputs, return_outputs=False, num_items_in_batch=None
@@ -92,11 +106,28 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         seq_n_tok = zeros.index_add(0, seq_ids, valid.to(log_ratio.dtype))
         seq_mean_lr = seq_lr_sum / seq_n_tok.clamp(min=1.0)
         rho = torch.exp(seq_mean_lr)  # (num_seq,) sequence-level IS ratio
-        rho_clipped = torch.clamp(rho, 1 - self.epsilon_low, 1 + self.epsilon_high)
+        valid = valid & (seq_n_tok[seq_ids] > 0)
+        adv = advantages[0]
+        seq_adv_sum = zeros.index_add(0, seq_ids, adv * valid)
+        seq_adv = seq_adv_sum / seq_n_tok.clamp(min=1.0)
+        eps_low = self.epsilon_low
+        eps_high = self.epsilon_high
+        if self._adaptive_clip_low_max is not None:
+            global_rho = self.accelerator.gather(rho.detach())
+            eps_low, eps_high = adaptive_clip_eps(
+                global_rho,
+                eps_low,
+                eps_high,
+                self._adaptive_clip_low_max,
+                self._adaptive_clip_high_max,
+                self._gspo_eps_max,
+            )
+            self._metrics["train"]["gspo/eps_low"].append(eps_low)
+            self._metrics["train"]["gspo/eps_high"].append(eps_high)
+        rho_clipped = torch.clamp(rho, 1 - eps_low, 1 + eps_high)
 
         rho_tok = rho[seq_ids]  # (T-1,) broadcast to tokens
         rho_clip_tok = rho_clipped[seq_ids]
-        adv = advantages[0]
         per_token_loss = -torch.min(rho_tok * adv, rho_clip_tok * adv)
 
         global_n_tokens = inputs["global_n_tokens"][0]
@@ -182,12 +213,17 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
             # clip block above reports the parent's quantities, which arm C's numbers
             # showed can look calm while the sequence clip does all the work.
             abs_log_rho = seq_mean_lr.detach().abs()
-            seq_low_frac = (rho < 1 - self.epsilon_low).float().mean()
-            seq_high_frac = (rho > 1 + self.epsilon_high).float().mean()
+            global_log_rho = self.accelerator.gather(seq_mean_lr.detach())
+            seq_low_frac = (rho < 1 - eps_low).float().mean()
+            seq_high_frac = (rho > 1 + eps_high).float().mean()
+            seq_active_low_frac = ((rho < 1 - eps_low) & (seq_adv < 0)).float().mean()
+            seq_active_high_frac = ((rho > 1 + eps_high) & (seq_adv > 0)).float().mean()
             seq_stats = torch.stack(
                 [
                     seq_low_frac,
                     seq_high_frac,
+                    seq_active_low_frac,
+                    seq_active_high_frac,
                     abs_log_rho.mean(),
                     abs_log_rho.max(),
                 ]
@@ -198,11 +234,29 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
             self._metrics["train"]["gspo/seq_clip_high_frac"].append(
                 self.accelerator.reduce(seq_stats[1], reduction="mean").item()
             )
-            self._metrics["train"]["gspo/abs_log_rho_mean"].append(
+            self._metrics["train"]["gspo/seq_active_clip_low_frac"].append(
                 self.accelerator.reduce(seq_stats[2], reduction="mean").item()
             )
+            self._metrics["train"]["gspo/seq_active_clip_high_frac"].append(
+                self.accelerator.reduce(seq_stats[3], reduction="mean").item()
+            )
+            self._metrics["train"]["gspo/abs_log_rho_mean"].append(
+                self.accelerator.reduce(seq_stats[4], reduction="mean").item()
+            )
             self._metrics["train"]["gspo/abs_log_rho_max"].append(
-                self.accelerator.reduce(seq_stats[3], reduction="max").item()
+                self.accelerator.reduce(seq_stats[5], reduction="max").item()
+            )
+            self._metrics["train"]["gspo/log_rho_mean"].append(
+                global_log_rho.mean().item()
+            )
+            self._metrics["train"]["gspo/log_rho_p50"].append(
+                torch.quantile(global_log_rho, 0.50).item()
+            )
+            self._metrics["train"]["gspo/log_rho_p95"].append(
+                torch.quantile(global_log_rho, 0.95).item()
+            )
+            self._metrics["train"]["gspo/log_rho_p99"].append(
+                torch.quantile(global_log_rho, 0.99).item()
             )
 
             comp_mask = completion_mask[0].float()
@@ -333,6 +387,9 @@ def main():
                     help="sequence-ratio lower clip (paper ~3e-4; token-level 0.2 was a no-op)")
     ap.add_argument("--gspo-eps-high", type=float, default=4e-4,
                     help="sequence-ratio upper clip (paper ~4e-4)")
+    ap.add_argument("--adaptive-clip-low-max", type=float, default=None)
+    ap.add_argument("--adaptive-clip-high-max", type=float, default=None)
+    ap.add_argument("--gspo-eps-max", type=float, default=0.1)
     ap.add_argument("--no-thinking", action="store_true",
                     help="do not pass enable_thinking=True to the chat template "
                          "(Qwen-family templates only; omit for other models)")
@@ -357,6 +414,12 @@ def main():
                          "bf16 compute is unaffected)")
     args = ap.parse_args()
 
+    if (args.adaptive_clip_low_max is None) != (args.adaptive_clip_high_max is None):
+        ap.error("both adaptive clip-fraction caps must be set together")
+    if args.adaptive_clip_low_max is not None and not args.gspo:
+        ap.error("adaptive clip-fraction caps require --gspo")
+    if args.gspo_eps_max < max(args.gspo_eps_low, args.gspo_eps_high):
+        ap.error("--gspo-eps-max must be at least both base epsilon values")
     if args.allow_tf32:
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
@@ -443,6 +506,9 @@ def main():
     trainer_kwargs = {}
     if args.gspo:
         trainer_kwargs["gspo_norm"] = args.gspo_norm
+        trainer_kwargs["adaptive_clip_low_max"] = args.adaptive_clip_low_max
+        trainer_kwargs["adaptive_clip_high_max"] = args.adaptive_clip_high_max
+        trainer_kwargs["gspo_eps_max"] = args.gspo_eps_max
     trainer = trainer_cls(
         model=args.model,
         reward_funcs=partial(load_reward_fn(args.reward), cap=args.max_completion),

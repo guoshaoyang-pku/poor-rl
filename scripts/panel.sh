@@ -20,5 +20,12 @@ if [ -z "$SWANLAB" ]; then
   exit 127
 fi
 
+# Best-effort: give each panel a "back to experiment home" button (no-op if already injected).
+INJECTOR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/inject_home_link.py"
+PYBIN="${VENV:+$VENV/bin/python}"
+if [ -n "$PYBIN" ] && [ -x "$PYBIN" ] && [ -f "$INJECTOR" ]; then
+  "$PYBIN" "$INJECTOR" >/dev/null 2>&1 || echo "[panel] home-link injection skipped" >&2
+fi
+
 mkdir -p "$LOGDIR"
 exec "$SWANLAB" watch "$LOGDIR" --host "$HOST" --port "$PORT"

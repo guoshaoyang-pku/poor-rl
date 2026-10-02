@@ -23,7 +23,7 @@ import math
 
 import torch
 
-from rlforge.gspo import reference_gspo
+from rlforge.gspo import adaptive_clip_eps, reference_gspo
 
 
 def packed_gspo_core(log_ratio, advantages, position_ids, completion_mask, eps_low, eps_high, norm):
@@ -173,10 +173,37 @@ def test_gradient_zero_when_clipped():
     assert (lr.grad == 0).all()
 
 
+def test_adaptive_clip_eps_enforces_global_caps():
+    rho = torch.tensor([0.70, 0.80, 0.91, 0.95, 1.00, 1.02, 1.05, 1.11, 1.15, 1.30])
+    eps_low, eps_high = adaptive_clip_eps(rho, 0.01, 0.01, 0.10, 0.20, 0.20)
+    assert eps_low >= 0.01
+    assert eps_high >= 0.01
+    assert int((rho < 1 - eps_low).sum()) <= 1
+    assert int((rho > 1 + eps_high).sum()) <= 2
+
+
+def test_adaptive_clip_eps_preserves_base_values_when_under_caps():
+    rho = torch.tensor([0.995, 1.0, 1.004, 0.999, 1.002])
+    assert adaptive_clip_eps(rho, 0.01, 0.01, 0.10, 0.20, 0.10) == (0.01, 0.01)
+
+
+def test_adaptive_clip_eps_fails_if_maximum_cannot_satisfy_cap():
+    rho = torch.tensor([0.50, 0.55, 0.60, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00])
+    try:
+        adaptive_clip_eps(rho, 0.01, 0.01, 0.10, 0.20, 0.10)
+    except ValueError as exc:
+        assert "low-side" in str(exc)
+    else:
+        raise AssertionError("expected max epsilon to reject an unsatisfied clip cap")
+
+
 if __name__ == "__main__":
     test_ratio_and_losses_match_reference()
     test_seq_mean_reweights_long_sequences()
     test_seq_clip_engages_on_drift()
     test_gradient_direction_positive_advantage()
     test_gradient_zero_when_clipped()
-    print("5 GSPO core tests passed")
+    test_adaptive_clip_eps_enforces_global_caps()
+    test_adaptive_clip_eps_preserves_base_values_when_under_caps()
+    test_adaptive_clip_eps_fails_if_maximum_cannot_satisfy_cap()
+    print("8 GSPO core tests passed")

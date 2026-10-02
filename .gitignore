@@ -10,4 +10,6 @@ evals/
 data/
 tmp/
 _shims/
-artifacts/swanlab/
+artifacts/
+# local-only archive of retired trial exports (still in git history)
+examples/suika_trials_archive/

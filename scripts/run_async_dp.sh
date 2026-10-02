@@ -18,6 +18,7 @@ SUFFIX="${2:-}"
 ROOT="${ROOT:?set ROOT}"
 VENV="${VENV:?set VENV}"
 MODEL="${MODEL:?set MODEL (also export RLFORGE_BASE_MODEL for checkpoint evals)}"
+REWARD="${REWARD:-rlforge.rewards.mcq:mcq_reward}"
 PORT="${PORT:-8000}"
 
 source "$VENV/bin/activate"
@@ -66,6 +67,9 @@ GSPO="${GSPO:-1}"
 GSPO_NORM="${GSPO_NORM:-seq_mean}"
 GSPO_EPS_LOW="${GSPO_EPS_LOW:-3e-4}"
 GSPO_EPS_HIGH="${GSPO_EPS_HIGH:-4e-4}"
+ADAPT_CLIP_LOW_MAX_FRAC="${ADAPT_CLIP_LOW_MAX_FRAC:-}"
+ADAPT_CLIP_HIGH_MAX_FRAC="${ADAPT_CLIP_HIGH_MAX_FRAC:-}"
+GSPO_EPS_MAX="${GSPO_EPS_MAX:-0.1}"
 CPS="${CPS:-256}"
 NGEN="${NGEN:-16}"
 STALE="${STALE:-3}"
@@ -92,6 +96,12 @@ EXTRA_ARGS=""
 [ "$DTYPE" = "bfloat16" ] && EXTRA_ARGS="$EXTRA_ARGS --dtype bfloat16"
 if [ "$GSPO" = "1" ]; then
   EXTRA_ARGS="$EXTRA_ARGS --gspo --gspo-norm $GSPO_NORM --gspo-eps-low $GSPO_EPS_LOW --gspo-eps-high $GSPO_EPS_HIGH"
+  if [ -n "$ADAPT_CLIP_LOW_MAX_FRAC" ] || [ -n "$ADAPT_CLIP_HIGH_MAX_FRAC" ]; then
+    if [ -z "$ADAPT_CLIP_LOW_MAX_FRAC" ] || [ -z "$ADAPT_CLIP_HIGH_MAX_FRAC" ]; then
+      echo "set both adaptive clip fraction caps" >&2; exit 2
+    fi
+    EXTRA_ARGS="$EXTRA_ARGS --adaptive-clip-low-max $ADAPT_CLIP_LOW_MAX_FRAC --adaptive-clip-high-max $ADAPT_CLIP_HIGH_MAX_FRAC --gspo-eps-max $GSPO_EPS_MAX"
+  fi
 fi
 [ "$MAX_STEPS" != "0" ] && EXTRA_ARGS="$EXTRA_ARGS --max-steps $MAX_STEPS"
 [ "$LIGER" = "1" ] && EXTRA_ARGS="$EXTRA_ARGS --use-liger"
@@ -181,6 +191,9 @@ manifest = {
     "hyperparams": {
         "gspo": "$GSPO" == "1", "gspo_norm": "${GSPO_NORM:-}",
         "gspo_eps_low": "${GSPO_EPS_LOW:-}", "gspo_eps_high": "${GSPO_EPS_HIGH:-}",
+        "adaptive_clip_low_max_frac": "${ADAPT_CLIP_LOW_MAX_FRAC:-}",
+        "adaptive_clip_high_max_frac": "${ADAPT_CLIP_HIGH_MAX_FRAC:-}",
+        "gspo_eps_max": "${GSPO_EPS_MAX:-0.1}",
         "cps": int("$CPS"), "ngen": int("$NGEN"), "stale": int("$STALE"),
         "inflight": int("$INFLIGHT"), "lr": "$LR", "epochs": "$EPOCHS",
         "max_steps": "${MAX_STEPS:-0}", "max_completion": int("$MAX_COMPLETION"),
