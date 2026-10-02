@@ -63,6 +63,7 @@ control (DQN etc.) use Stable-Baselines3/CleanRL; for ≥8B or multi-node use ve
 | [`docs/PITFALLS.md`](docs/PITFALLS.md) | Six production failure modes this framework guards against |
 | [`docs/PRECISION.md`](docs/PRECISION.md) | bf16/fp32-master recipes, fp8 path |
 | [`docs/PANEL.md`](docs/PANEL.md) | SwanLab local tracking, unified Home, RL-specific reports |
+| [`docs/PANEL_LINK.md`](docs/PANEL_LINK.md) | 面板联动与协作查看：镜像守护、样本查看器、GPU 状态、协作者接入指南 |
 | [`docs/rl_trials.md`](docs/rl_trials.md) | Algorithm-neutral RL trials panel, bundled Suika history |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Where this is going and what is explicitly out of scope |
 | [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) | Backbone checklist for plugging in external small-RL projects |
