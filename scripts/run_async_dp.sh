@@ -71,7 +71,7 @@ LORA="${LORA:-0}"
 LORA_R="${LORA_R:-16}"
 LORA_ALPHA="${LORA_ALPHA:-0}"   # 0 = 2 x r
 LORA_DROPOUT="${LORA_DROPOUT:-0.0}"
-LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj}"
+LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj,in_proj_qkv,in_proj_z,in_proj_a,in_proj_b,out_proj}"
 GSPO="${GSPO:-1}"
 GSPO_NORM="${GSPO_NORM:-seq_mean}"
 GSPO_EPS_LOW="${GSPO_EPS_LOW:-3e-4}"
@@ -168,6 +168,34 @@ if [ "$LORA" = "1" ]; then
   EXTRA_ARGS="$EXTRA_ARGS --lora --lora-r $LORA_R --lora-dropout $LORA_DROPOUT --lora-target-modules $LORA_TARGET_MODULES"
   [ "$LORA_ALPHA" != "0" ] && EXTRA_ARGS="$EXTRA_ARGS --lora-alpha $LORA_ALPHA"
   echo "[dp] lora: r=$LORA_R alpha=${LORA_ALPHA:-auto} rank_cap=$LORA_RANK slots=$LORA_SLOTS targets=$LORA_TARGET_MODULES"
+  # Coverage preflight: a target list that is correct for a pure transformer (q/k/v/o + MLP)
+  # matches NOTHING on the GatedDeltaNet token mixers of a 3:1 hybrid Qwen3.5/3.8 model, so
+  # the run would train a partial adapter while reporting a plausible-looking size.
+  "$VENV/bin/python" - "$MODEL" "$LORA_TARGET_MODULES" <<'PY' || exit 2
+import sys
+
+from transformers import AutoConfig
+
+model, targets = sys.argv[1], {t.strip() for t in sys.argv[2].split(",") if t.strip()}
+cfg = AutoConfig.from_pretrained(model)
+tc = cfg.get_text_config() if hasattr(cfg, "get_text_config") else cfg
+kinds = set(getattr(tc, "layer_types", None) or [])
+gaps = []
+if "linear_attention" in kinds and "in_proj_qkv" not in targets:
+    gaps.append("linear_attention (GatedDeltaNet) token mixers are uncovered: add "
+                "in_proj_qkv,in_proj_z,in_proj_a,in_proj_b,out_proj")
+if "full_attention" in kinds and not {"q_proj", "k_proj", "v_proj", "o_proj"} <= targets:
+    gaps.append("full_attention projections are uncovered: add q_proj,k_proj,v_proj,o_proj")
+if "linear_attention" in kinds and "in_proj_qkv" in targets and "out_proj" not in targets:
+    gaps.append("in_proj_* is covered but out_proj (the DeltaNet output projection) is not")
+if gaps:
+    print("[dp] LORA COVERAGE ERROR:")
+    for g in gaps:
+        print("[dp]   - " + g)
+    sys.exit(1)
+
+print(f"[dp] lora coverage OK for layer kinds {sorted(kinds) or ['attention-only']}")
+PY
 fi
 echo "[dp] vllm extra:${VLLM_EXTRA:- (stock)}"
 

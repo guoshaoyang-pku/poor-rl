@@ -54,6 +54,87 @@ the same server and ids, so the plumbing noise floor is already comparable to th
 entire FP8 contribution. The probe was run with a trained fp32 LoRA adapter
 (`docs/LORA.md`), which contributes ~1e-3 of the gap by itself.
 
+## FP4 on H200: what works, what does not (2026-10-03)
+
+Measured on 360-1 H200 (sm90). The headline is that **FP4 rollout is possible on
+Hopper, but only via MXFP4 — and only as weight-only A16.**
+
+| path | works on sm90? | reason |
+|---|---|---|
+| `fp_quant` | **no** | `get_min_capability() == 100`; hard Blackwell gate |
+| `nvfp4_per_token` | **no, and a no-op** | the online shorthand sets only `moe=QuantSpec(...)`; `linear` is left unquantized. The MoE method raises `ValueError` unless `is_device_capability_family(100)`. **On a dense model there are no MoE layers, so it quantizes nothing at all — which is why it starts with no error.** |
+| `modelopt_fp4` | no | needs a ModelOpt pre-quantized checkpoint; no usable impl file in this vLLM build |
+| **online `mxfp4`** | **yes** | `Mxfp4OnlineLinearMethod` has **no arch gate**; it resolves to `MarlinMxFp4LinearKernel` (`is_fp4_marlin_supported()` = `is_cuda() and capability >= 75`) |
+
+Working invocation (dense model):
+
+```bash
+vllm serve "$MODEL" --dtype bfloat16 \
+  --quantization online --quantization-config '{"linear": "mxfp4"}'
+```
+
+`--quantization mxfp4` **alone does not work**: `mxfp4` is in
+`_DEFERRED_ONLINE_SHORTHANDS`, so with no checkpoint metadata
+`resolve_quantization_config` returns `None` and the model loads unquantized.
+
+Two caveats the server logs about Marlin MXFP4, both material:
+`MarlinMxFp4LinearKernel is a weight-only (A16) kernel; the requested activation
+quantization is ignored` (activations stay 16-bit, so there is **no** activation-side
+FP4 speedup), and `Marlin requires thread-tile padding for some weight shapes in
+this model ... performance may be degraded`.
+
+### Serving matrix (1 GPU, max-len 4096, 256 concurrency, 1024 in / 256 out)
+
+| weights | KV | LoRA | out tok/s @256 | KV tokens | model load |
+|---|---|---|---:|---:|---:|
+| bf16 | bf16 | no | **10,957** | 2,437,412 | 1.72 GiB |
+| fp8 | bf16 | no | 10,932 | 2,463,744 | 1.18 GiB |
+| **mxfp4 (Marlin)** | bf16 | no | 10,798 | 2,477,494 | **0.91 GiB** |
+| bf16 | **fp8** | no | 10,227 | **3,463,577** | 1.72 GiB |
+| mxfp4 | **fp8** | no | 9,881 | **3,520,102** | 0.91 GiB |
+| mxfp4 | fp8 | **yes** | **7,954** | 3,483,238 | 1.23 GiB |
+
+Three conclusions:
+
+1. **Weight precision is not a rollout throughput lever.** bf16 -> MXFP4 is
+   **-1.5%**; bf16 -> fp8 is -0.2%. Do not expect a weight-format change to buy
+   decode speed at this scale.
+2. **FP8 KV buys +42% KV capacity** (2.44M -> 3.46M tokens) but **-6% throughput**
+   when the run is not capacity-bound (256 concurrency vs a 595-sequence ceiling).
+   Its benefit only appears once concurrency actually saturates the cache. This
+   also means the earlier "fp8 weights + fp8 KV = 2.82x" reading was **almost
+   entirely the KV half**, measured in a capacity-bound regime.
+3. **LoRA costs ~15% on rollout** (9,376 -> 7,954 tok/s at 256; p95 6.92 -> 8.17 s).
+   MXFP4 + LoRA is nonetheless functional: the kernel stays
+   `MarlinMxFp4LinearKernel`, the adapter registers as a servable model, and a
+   synthetic scale-0.05 adapter changed all 3/3 test prompts (sum-logprob
+   -16.06 -> -41.78 etc.), so the adapter is genuinely applied on top of the
+   quantized base.
+
+### Why FP4 training is still not a thing here
+
+The trainer bottleneck is **not** GEMM. Profiler on a controlled bench: the GPU is
+saturated 620/629 ms = **98.6%**, but it is eaten by
+`vectorized_elementwise_kernel` + `elementwise_kernel` (~8.5 ms each x 37), while
+the actual GEMM kernels (`sm90_xmma_gemm`) total only **~92 ms ≈ 15%** of the step.
+FP8 kernel calls measured **812 ms vs 121 ms for bf16 (6.7x slower)**.
+
+Controlled trainer throughput (8192 tokens, fused-CE, no fp32-logits artifact):
+
+| config | tok/s | vs bf16 full FT |
+|---|---:|---:|
+| bf16 full FT | 41,715 | 1.00x |
+| bf16 base + LoRA | 30,983 | 0.74x |
+| fp8 base + LoRA | 22,001 | 0.53x |
+
+So on Hopper, **both FP8 and FP4 are dead ends on the trainer side**: there are no
+FP4 tensor cores, `transformer_engine` is absent, and the GEMM that a lower
+precision could accelerate is only 15% of the step. Keep FP32 master + BF16 compute.
+
+**FP4 pays off only where it buys memory for KV capacity/concurrency** — i.e. at
+27B (bf16 54 GB -> MXFP4 ~13.5 GB frees ~40 GB), not at 0.8B (0.81 GiB saved,
++1.6% KV tokens, -1.5% throughput).
+
 ## How to verify updates are not being eaten
 
 1. Log `grad_norm` (already in the trainer logs) and lr; the expected update RMS

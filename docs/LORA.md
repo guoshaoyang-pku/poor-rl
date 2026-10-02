@@ -97,6 +97,16 @@ unhealthy -- see the next section.
   smoke, not a learning result. Reward in that smoke was degenerate (-1.85..-2.0)
   because the base model rambles past a 4096-token cap (99% of completions
   truncated); that is a `MAX_COMPLETION` config choice, not a LoRA defect.
+- **LoRA costs ~15% on rollout** (9,376 -> 7,954 tok/s at 256 concurrency, p95
+  6.92 -> 8.17 s) and **0.74x on the trainer** at 0.8B. Both are acceptable only
+  because the system is rollout-bound (a 1.54x rollout deficit), so trainer slack
+  hides the trainer tax; the payoff is sync bytes and memory headroom, which matter
+  at 27B rather than at 0.8B.
+- **An FP4 (MXFP4/Marlin) base works with LoRA on Hopper.** Verified on 360-1:
+  kernel stays `MarlinMxFp4LinearKernel`, the adapter registers as a servable model,
+  and a synthetic adapter changed 3/3 test prompts. See
+  `docs/PRECISION.md` ("FP4 on H200") for the invocation and the full serving
+  matrix. Note the base is weight-only A16, so no activation-side FP4 speedup.
 
 ## Do not pack a hybrid model's sequences into one forward
 

@@ -23,6 +23,20 @@ beta=0 (no ref-model forward), packed padding-free rows.
 | R4 | `FI_SAMPLER=1` | +3-8% | batched flashinfer sampling kernel | test |
 | R5 | `ROLLOUT_QUANTIZATION=fp8` | test | quantizes rollout weights in vLLM; model/kernel support and quality must be checked on target hardware | Hopper+ |
 | R6 | speculative decoding | **rejected** | batch-bound rollout; spec-decode helps low-batch latency, not throughput | — |
+| R7 | MXFP4 rollout base (`--quantization online --quantization-config '{"linear":"mxfp4"}'`) | **-1.5% throughput, +1.6% KV capacity for a 0.8B model**; intended for 27B, where bf16 54 GB -> ~13.5 GB frees ~40 GB for KV | weight-only A16 Marlin kernel; real value is memory-for-concurrency, not compute | Hopper+ (sm75+); NVFP4/`nvfp4_per_token`/`fp_quant` are **Blackwell-only** and no-ops or errors here — see `docs/PRECISION.md` |
+
+### CPU KV offload SOP
+
+Native vLLM CPU KV offload is validated as a capacity option for long-context or
+high-concurrency serving. In the tested vLLM 0.30 / H200 setup, FP8 KV plus a
+16-GiB native CPU offload tier completed 512/512 requests at roughly 32.7k input
+and 64 output tokens per request, with no discernible throughput loss against
+the paired no-offload arm. Keep prefix caching enabled for this workload. The
+launcher passes extra server flags through `VLLM_EXTRA`; enable the native
+backend and size only on a tested vLLM/backend combination, then re-check request
+success, throughput, and host RAM pressure on the target workload. This is a
+workload-specific validation, not a guarantee that offload is free for every
+sequence length or server configuration.
 
 ## Trainer
 
