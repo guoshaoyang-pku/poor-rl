@@ -31,6 +31,7 @@ on a single GPU node, fully offline.
 | 🗺️ | More algorithms | DPO/PPO/KTO come from TRL; reward/watchdog/panel layers are algorithm-agnostic |
 | 🗺️ | VLM/VLA | Image-input GRPO exists in TRL; missing piece is the closed-loop rollout adapter |
 | **Infra** | | |
+| 🔶 | Full-parameter SFT path | Qwen native-thinking, strict data/template checks, resumable Trainer checkpoints; GPU recovery smoke still required before unattended launch |
 | ✅ | Precision stack | Default: **fp32 master weights + bf16 training compute + bf16 rollout inference** ([`docs/PRECISION.md`](docs/PRECISION.md)) |
 | ✅ | fp8 KV cache (H200 default) | 1.82x KV capacity, accuracy-neutral in paired eval; `KV_DTYPE=auto` to opt out |
 | ✅ | Watchdog for unattended runs | In-loop held-out eval, keep-best checkpoint copy, 5 auto-stop rules |
@@ -62,6 +63,7 @@ control (DQN etc.) use Stable-Baselines3/CleanRL; for ≥8B or multi-node use ve
 | Doc | Contents |
 |---|---|
 | [`docs/QUICKSTART.md`](docs/QUICKSTART.md) | Install, single-node quickstart, adaptive clip caps, custom rewards |
+| [`docs/SFT.md`](docs/SFT.md) | Qwen native-thinking SFT, checkpoint/resume guardrails, recovery smoke, held-out checkpoint ladder SOP |
 | [`docs/AGENTIC.md`](docs/AGENTIC.md) | Agentic ReAct + MCP harness, SkillBank prototype, current limitations |
 | [`docs/GSPO.md`](docs/GSPO.md) | The GSPO contract — normalization, clip calibration, what we got wrong |
 | [`docs/PITFALLS.md`](docs/PITFALLS.md) | Six production failure modes this framework guards against |
@@ -86,9 +88,10 @@ src/rlforge/eval_mcq.py   held-out evaluator (vLLM), shared scoring path
 src/rlforge/watchdog.py   in-loop eval / keep-best / auto-stop
 src/rlforge/report.py     auto HTML report (RL-specific panel)
 scripts/run_async_dp.sh   single-node launcher (vLLM server + DP trainer)
+scripts/sft/              Qwen native-thinking SFT, recovery smoke, held-out checkpoint ladder
 scripts/panel.sh          SwanLab local dashboard over tracked runs
 scripts/home.py           unified local Home for all panels
-tests/                    GSPO core math + reward/parser tests
+tests/                    GSPO core math, reward/parser, SFT recovery guardrail tests
 examples/aiq_mcq/         data format + a runnable example config
 examples/custom_reward/   minimal annotated custom reward
 examples/suika_trials/    bundled 37-trial DQN history for the trials panel
