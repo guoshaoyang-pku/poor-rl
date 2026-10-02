@@ -22,8 +22,11 @@ forward), so a 2e-6 update always lands, while the matmuls run at bf16 speed.
 ## Going lower than bf16
 
 - FP8 rollout is independent of actor precision. The launcher defaults to `KV_DTYPE=fp8` on the validated H200 setup; set `KV_DTYPE=auto` to disable it or compare against BF16/auto. It can reduce KV-cache memory substantially. On other accelerators, verify vLLM support before use.
-- `ROLLOUT_QUANTIZATION=fp8` asks vLLM to quantize rollout weights/compute. This can save additional memory, but has a larger numerical effect than FP8 KV cache and is model/backend dependent. The following short GSPO integration smoke passed, but FP8-weight quality and long-run stability are **not yet validated**; use it as an experimental arm, not the default.
+- Native CPU KV offload is a recommended serving SOP when long contexts or high concurrency need additional KV capacity. It passed a 512-request paired test with a 16-GiB CPU tier on vLLM 0.30 / H200 using FP8 KV; treat the result as workload-specific and revalidate throughput, request success, and host-memory pressure on the target backend.
+- CPU offload of actor/model parameters is separate from KV offload: FSDP2 parameter offload is implemented but remains disabled by default because measured training steps were about 64% slower. Use only when its memory savings are needed.
+- `ROLLOUT_QUANTIZATION=fp8` asks vLLM to quantize rollout weights/compute. It can save additional memory and is now measured on identical token ids against a bf16-weight control (see "Logprob-gap probe" below): FP8 multiplies per-token logprob noise ~5x while moving the **sequence-level** GSPO ratio by only ~1-3%. It pairs correctly with an fp32 LoRA adapter (`docs/LORA.md`). FP8 KV stays the validated default; FP8 weights remain an opt-in per-experiment choice, since long-run quality is still unproven.
 - Keep actor master weights FP32 (`DTYPE=none`) with BF16 autocast (`MIXED_PRECISION=bf16`) for this experiment. Do not raise the learning rate merely to compensate for FP8 inference; first check policy-ratio/clip health against a BF16 rollout control.
+- A high `gspo/seq_clip_low_frac` is **not** a precision symptom, and widening eps is not the fix. Measured cause on Qwen3.5-0.8B: the async trainer packs a rank's sequences into one forward with per-sequence `position_ids`, which does not reset the hybrid GatedDeltaNet layers' conv/recurrent state, so packed logprobs drift by -0.10 to -0.62/token depending on pack position. BF16, FP8-weight and FP8-KV arms all show it; diagnosis and fix options are in `docs/LORA.md` ("Do not pack a hybrid model's sequences").
 
 ### H200 smoke and paired held-out validation (vLLM 0.30, Qwen3.5-0.8B, 2026-10-01)
 
@@ -31,6 +34,25 @@ forward), so a 2e-6 update always lands, while the matmuls run at bf16 speed.
 - Paired evaluation used the same `async_dp_flip450` checkpoint-500, 50 held-out questions, two samples per question, T=1.0/top-p=1.0/max-tokens=16,384, 16 concurrent requests, and matched request seeds. Across three repeated passes, mean accuracy was 33.7% (auto) vs 35.0% (FP8); parse rate 95.7% vs 95.3%; truncation 0% in both. Median generated-token throughput was 284 vs 309 tokens/s (**+8.6%** FP8), while mean request latency was 1.54 vs 1.46 s. This is a small, single-model/task probe: no statistically reliable accuracy gain is claimed, and other prompt lengths/load levels may show different throughput.
 - FP8-weight GSPO was run for 3 steps on 360-1 H200 (vLLM 0.30, Qwen3.5-0.8B), with FP32 actor/master weights, BF16 autocast/compute, FP8 rollout weights, FP8 KV cache, 2e-6 LR, and matched 3-step BF16-weight control. Both completed live weight sync each step and produced changed FP32 checkpoints; nonzero gradients were observed (FP8 norm 9.1–16.1, BF16 norm 6.6–12.4). The brief run proves the training/sync/update path executes, **not** learning quality. Both arms showed very high `gspo/seq_clip_low_frac` (~0.98–1.00), so diagnose ratio/logprob alignment on a representative run before scaling up; FP8 weights are not approved as a production default.
 - FP8 KV cache is marked **operationally validated and default for H200 runs**. On unsupported accelerators or when investigating regressions, explicitly set `KV_DTYPE=auto`. Temporary vLLM services were stopped after testing; the only remaining GPU usage was an unrelated user-owned benchmark, left untouched.
+
+### Logprob-gap probe (2026-10-03, 360-1 H200, vLLM 0.30)
+
+Same token ids scored by the vLLM server under three precision configs and by the
+trainer-side model (`delta = logp_trainer - logp_rollout`), 5 sequences / 1044
+continuation tokens:
+
+| rollout config | per-token abs_mean | sequence-level abs_mean | sequence rho range |
+|---|---|---|---|
+| BF16 weights + BF16 KV | 0.0104 | 0.0019 | 0.9955 - 1.0013 |
+| FP8 weights + BF16 KV | 0.0482 | 0.0087 | 0.9923 - 1.0271 |
+| FP8 weights + FP8 KV | 0.0533 | 0.0091 | 0.9936 - 1.0230 |
+
+FP8 weights and FP8 KV are close to additive, and the quantity GSPO actually clips
+on (sequence ratio) stays within ~1-3% of 1.0. For reference, vLLM's own
+generation-time vs prefill-scoring logprobs differ by -0.016/token (rho 0.984) on
+the same server and ids, so the plumbing noise floor is already comparable to the
+entire FP8 contribution. The probe was run with a trained fp32 LoRA adapter
+(`docs/LORA.md`), which contributes ~1e-3 of the gap by itself.
 
 ## How to verify updates are not being eaten
 

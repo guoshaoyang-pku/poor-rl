@@ -35,7 +35,8 @@ on a single GPU node, fully offline.
 | ✅ | Precision stack | Default: **fp32 master weights + bf16 training compute + bf16 rollout inference** ([`docs/PRECISION.md`](docs/PRECISION.md)) |
 | ✅ | fp8 KV cache (H200 default) | 1.82x KV capacity, accuracy-neutral in paired eval; `KV_DTYPE=auto` to opt out |
 | ✅ | Watchdog for unattended runs | In-loop held-out eval, keep-best checkpoint copy, 5 auto-stop rules |
-| 🗺️ | fp8 rollout weights | `ROLLOUT_QUANTIZATION=fp8` smoke-tested; ratio/logprob alignment not yet validated |
+| ✅ | LoRA / adapter training | `LORA=1`: bf16 frozen base + fp32 adapter, adapter-only policy sync (25.6 MB vs 1.75 GB, 0.12-0.19 s/step) ([`docs/LORA.md`](docs/LORA.md)) |
+| 🔶 | fp8 rollout weights | `ROLLOUT_QUANTIZATION=fp8` measured against a BF16 control with a fp32 LoRA adapter: sequence-level ratio deviation ~1-3%; long-run quality unproven |
 | 🗺️ | FSDP path for >3B | Validated single-node config in `examples/accelerate/`; LoRA arms stay on DDP |
 | **Panel** | | |
 | ✅ | Experiment tracking & panels | SwanLab local mode by default, unified local Home, RL-specific auto HTML report |
@@ -67,7 +68,8 @@ control (DQN etc.) use Stable-Baselines3/CleanRL; for ≥8B or multi-node use ve
 | [`docs/AGENTIC.md`](docs/AGENTIC.md) | Agentic ReAct + MCP harness, SkillBank prototype, current limitations |
 | [`docs/GSPO.md`](docs/GSPO.md) | The GSPO contract — normalization, clip calibration, what we got wrong |
 | [`docs/PITFALLS.md`](docs/PITFALLS.md) | Six production failure modes this framework guards against |
-| [`docs/PRECISION.md`](docs/PRECISION.md) | bf16/fp32-master recipes, fp8 path |
+| [`docs/PRECISION.md`](docs/PRECISION.md) | bf16/fp32-master recipes, fp8 path, measured train/rollout logprob gap |
+| [`docs/LORA.md`](docs/LORA.md) | LoRA recipe (fp32 adapter on bf16 base), adapter-only sync, measured FP8 counterpart |
 | [`docs/PANEL.md`](docs/PANEL.md) | SwanLab local tracking, unified Home, RL-specific reports |
 | [`docs/PANEL_LINK.md`](docs/PANEL_LINK.md) | 面板联动与协作查看：镜像守护、样本查看器、GPU 状态、协作者接入指南 |
 | [`docs/rl_trials.md`](docs/rl_trials.md) | Algorithm-neutral RL trials panel, bundled Suika history |

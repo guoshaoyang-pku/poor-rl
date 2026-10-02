@@ -412,12 +412,40 @@ def main():
     ap.add_argument("--allow-tf32", action="store_true",
                     help="enable TF32 matmul (matters for the fp32-master recipe; "
                          "bf16 compute is unaffected)")
+    # --- LoRA / PEFT (adapter-only training; see docs/LORA.md) -----------------------
+    ap.add_argument("--lora", action="store_true",
+                    help="train a PEFT LoRA adapter instead of the full weights. The base "
+                         "model stays frozen (load it in bf16: --dtype bfloat16) and PEFT "
+                         "keeps the adapter itself in fp32, so small-lr updates still land "
+                         "-- the adapter-side equivalent of the fp32-master recipe. With a "
+                         "vLLM server started --enable-lora, each sync then ships the "
+                         "adapter (~1%% of the bytes) instead of merged full weights.")
+    ap.add_argument("--lora-r", type=int, default=16)
+    ap.add_argument("--lora-alpha", type=int, default=0,
+                    help="LoRA scaling numerator; 0 = 2 x r (the usual default)")
+    ap.add_argument("--lora-dropout", type=float, default=0.0)
+    ap.add_argument("--lora-target-modules",
+                    default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
+                    help="comma-separated module name suffixes (attention + MLP by default). "
+                         "The head/embeddings are rejected: the async trainer's chunked "
+                         "logprob path reads the head's base weight and would silently "
+                         "score a policy without the adapter.")
     args = ap.parse_args()
 
     if (args.adaptive_clip_low_max is None) != (args.adaptive_clip_high_max is None):
         ap.error("both adaptive clip-fraction caps must be set together")
     if args.adaptive_clip_low_max is not None and not args.gspo:
         ap.error("adaptive clip-fraction caps require --gspo")
+    lora_targets = [t.strip() for t in args.lora_target_modules.split(",") if t.strip()]
+    if args.lora:
+        banned = {"lm_head", "wte", "embed_tokens", "output", "score"}
+        hit = sorted(set(lora_targets) & banned)
+        if hit:
+            ap.error(f"--lora-target-modules must not contain {hit}: the chunked logprob path "
+                     "reads the head's base weights, so the trainer would score a policy the "
+                     "server does not serve")
+        if not lora_targets:
+            ap.error("--lora-target-modules is empty")
     if args.gspo_eps_max < max(args.gspo_eps_low, args.gspo_eps_high):
         ap.error("--gspo-eps-max must be at least both base epsilon values")
     if args.allow_tf32:
@@ -509,6 +537,21 @@ def main():
         trainer_kwargs["adaptive_clip_low_max"] = args.adaptive_clip_low_max
         trainer_kwargs["adaptive_clip_high_max"] = args.adaptive_clip_high_max
         trainer_kwargs["gspo_eps_max"] = args.gspo_eps_max
+    if args.lora:
+        from peft import LoraConfig
+
+        lora_alpha = args.lora_alpha or 2 * args.lora_r
+        trainer_kwargs["peft_config"] = LoraConfig(
+            r=args.lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=args.lora_dropout,
+            target_modules=lora_targets,
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        print(f"[rlforge] LoRA: r={args.lora_r} alpha={lora_alpha} dropout={args.lora_dropout} "
+              f"targets={lora_targets} (base dtype={args.dtype}; PEFT keeps the adapter in "
+              f"fp32 when the base is bf16)")
     trainer = trainer_cls(
         model=args.model,
         reward_funcs=partial(load_reward_fn(args.reward), cap=args.max_completion),

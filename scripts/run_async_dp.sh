@@ -63,6 +63,15 @@ NO_THINKING="${NO_THINKING:-0}"
 # FP8 KV is validated on H200; set KV_DTYPE=auto on unsupported hardware or to compare.
 KV_DTYPE="${KV_DTYPE:-fp8}"
 ROLLOUT_QUANTIZATION="${ROLLOUT_QUANTIZATION:-none}" # none or fp8; vLLM weight quantization
+# LoRA (PEFT adapter training). LORA=1 freezes the base model, trains an fp32 adapter
+# (PEFT keeps adapters fp32 when the base is bf16) and -- with the server-side flags added
+# below -- syncs only the adapter each step (~1% of the bytes). The base can still be served
+# under ROLLOUT_QUANTIZATION=fp8; measure the resulting train/rollout logprob gap.
+LORA="${LORA:-0}"
+LORA_R="${LORA_R:-16}"
+LORA_ALPHA="${LORA_ALPHA:-0}"   # 0 = 2 x r
+LORA_DROPOUT="${LORA_DROPOUT:-0.0}"
+LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj}"
 GSPO="${GSPO:-1}"
 GSPO_NORM="${GSPO_NORM:-seq_mean}"
 GSPO_EPS_LOW="${GSPO_EPS_LOW:-3e-4}"
@@ -143,6 +152,23 @@ case "$ROLLOUT_QUANTIZATION" in
   *) echo "ROLLOUT_QUANTIZATION must be none or fp8 (got $ROLLOUT_QUANTIZATION)" >&2; exit 2 ;;
 esac
 [ -n "${KV_DTYPE:-}" ] && [ "$KV_DTYPE" != "auto" ] && VLLM_EXTRA="$VLLM_EXTRA --kv-cache-dtype $KV_DTYPE"
+if [ "$LORA" = "1" ]; then
+  # Adapter-only sync: the trainer saves each policy version under $OUT/.vllm_lora and the
+  # server loads it over the HTTP API, so the server must allow runtime adapter updates and
+  # hold every version an in-flight request can still name (max_staleness + 2, per TRL).
+  # --max-lora-rank must be one of vLLM's stacked-buffer ranks and >= the adapter's rank.
+  export VLLM_ALLOW_RUNTIME_LORA_UPDATING=1
+  LORA_RANK="$LORA_R"
+  for cand in 1 8 16 32 64 128 256 320 512; do
+    if [ "$cand" -ge "$LORA_R" ]; then LORA_RANK="$cand"; break; fi
+  done
+  [ "$LORA_RANK" -ge "$LORA_R" ] || { echo "LORA_R $LORA_R exceeds vLLM's max rank 512" >&2; exit 2; }
+  LORA_SLOTS=$((STALE + 2))
+  VLLM_EXTRA="$VLLM_EXTRA --enable-lora --max-lora-rank $LORA_RANK --max-loras $LORA_SLOTS"
+  EXTRA_ARGS="$EXTRA_ARGS --lora --lora-r $LORA_R --lora-dropout $LORA_DROPOUT --lora-target-modules $LORA_TARGET_MODULES"
+  [ "$LORA_ALPHA" != "0" ] && EXTRA_ARGS="$EXTRA_ARGS --lora-alpha $LORA_ALPHA"
+  echo "[dp] lora: r=$LORA_R alpha=${LORA_ALPHA:-auto} rank_cap=$LORA_RANK slots=$LORA_SLOTS targets=$LORA_TARGET_MODULES"
+fi
 echo "[dp] vllm extra:${VLLM_EXTRA:- (stock)}"
 
 # ---- run manifest + code snapshot (contract A/H): written BEFORE anything starts, so a
@@ -205,6 +231,9 @@ manifest = {
         "tracker_backend": "$REPORT_TO", "swanlab_mode": "${SWANLAB_MODE:-disabled}",
         "rollout_dtype": "bfloat16", "rollout_quantization": "$ROLLOUT_QUANTIZATION",
         "kv_cache_dtype": "${KV_DTYPE:-auto}",
+        "lora": "$LORA" == "1", "lora_r": int("$LORA_R"),
+        "lora_alpha": "$LORA_ALPHA", "lora_dropout": "$LORA_DROPOUT",
+        "lora_target_modules": "$LORA_TARGET_MODULES",
     },
     "reward": {"correct": 1.0, "wrong": 0.0, "unparsed": -0.5, "truncated": -2.0,
                "ranking": "exact=+1 else concordant/5-1", "cap": int("$MAX_COMPLETION")},
