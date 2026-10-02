@@ -68,6 +68,7 @@ control (DQN etc.) use Stable-Baselines3/CleanRL; for ≥8B or multi-node use ve
 | [`docs/AGENTIC.md`](docs/AGENTIC.md) | Agentic ReAct + MCP harness, SkillBank prototype, current limitations |
 | [`docs/GSPO.md`](docs/GSPO.md) | The GSPO contract — normalization, clip calibration, what we got wrong |
 | [`docs/PITFALLS.md`](docs/PITFALLS.md) | Six production failure modes this framework guards against |
+| [`docs/PACKING.md`](docs/PACKING.md) | Padding-free packing on hybrid GatedDeltaNet backbones: the silent cross-sample leakage, its measured size, and the boundary-aware fix |
 | [`docs/PRECISION.md`](docs/PRECISION.md) | bf16/fp32-master recipes, fp8 path, measured train/rollout logprob gap |
 | [`docs/LORA.md`](docs/LORA.md) | LoRA recipe (fp32 adapter on bf16 base), adapter-only sync, measured FP8 counterpart |
 | [`docs/PANEL.md`](docs/PANEL.md) | SwanLab local tracking, unified Home, RL-specific reports |

@@ -24,6 +24,7 @@ from trl.experimental.async_grpo import AsyncGRPOConfig, AsyncGRPOTrainer
 from trl.trainer.utils import nanmax, nanmin
 
 from rlforge.gspo import adaptive_clip_eps
+from rlforge.hybrid_packing import boundary_aware_packing, install as install_packing
 from rlforge.rewards import load_reward_fn
 
 class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
@@ -78,13 +79,20 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         advantages = inputs["advantages"][mask_bool].unsqueeze(0)
 
         forward_start = time.perf_counter()
-        outputs = model(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            labels=input_ids,
-            completion_mask=completion_mask,
-            use_cache=False,
-        )
+        # Padding-free packing concatenates several samples into this one row and resets
+        # position_ids at each sample boundary. The attention layers honour that via the
+        # block-diagonal mask, but the GatedDeltaNet layers do not receive the boundaries at all
+        # unless we hand them over here. Without this, the conv window and recurrent state of
+        # sample i leak into sample i+1 (measured: +0.489 / +1.142 nats on segments 1/2 of a
+        # 3-way packed row), which inflates the trainer's logprobs and pins seq_clip_low_frac.
+        with boundary_aware_packing(position_ids):
+            outputs = model(
+                input_ids=input_ids,
+                position_ids=position_ids,
+                labels=input_ids,
+                completion_mask=completion_mask,
+                use_cache=False,
+            )
         log_probs, entropy = outputs["log_probs"], outputs["entropy"]
         self._last_forward_time_s = time.perf_counter() - forward_start
 
@@ -559,6 +567,10 @@ def main():
         train_dataset=ds,
         **trainer_kwargs,
     )
+    # Must happen before the first packed forward. On a hybrid GatedDeltaNet backbone this is
+    # what stops a packed row's segments from bleeding into each other (see
+    # rlforge.hybrid_packing); on any other architecture it is a cheap no-op.
+    install_packing(getattr(trainer, "model", None))
     trainer.train()
     trainer.save_model(args.out + "/final")
     with open(args.out + "/log_history.json", "w") as f:
