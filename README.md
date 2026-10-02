@@ -18,23 +18,27 @@ on a single GPU node, fully offline.
 
 | Status | Feature | Notes |
 |---|---|---|
+| **Algorithm** | | |
 | ✅ | Async GSPO/GRPO training | TRL `AsyncGRPOTrainer` + vLLM rollout server, static GPU split (e.g. 4+4), staleness up to 3 validated |
 | ✅ | Sequence-level IS with `seq_mean` normalization | The GSPO paper's objective; ratio/normalization/clip math pinned by `tests/test_gspo_core.py` |
 | ✅ | Adaptive clip-fraction caps | Widens `eps` up to `GSPO_EPS_MAX` when the clipped-sequence fraction exceeds budget; `gspo/eps_*` and advantage-gated `gspo/seq_active_clip_*` metrics |
 | ✅ | Length-aware truncation penalty | Reward sees token counts; `-2` on cap hit actually fires |
 | ✅ | Custom reward protocol | Any `module:function`; built-in MCQ/ranking grader with per-task/source counters |
-| ✅ | Watchdog for unattended runs | In-loop held-out eval, keep-best checkpoint copy, 5 auto-stop rules |
-| ✅ | Experiment tracking & panels | SwanLab local mode by default, unified local Home, RL-specific auto HTML report |
-| ✅ | Algorithm-neutral RL trials dashboard | Serves DQN/Suika trial history alongside LLM RL; per-run notes, 37-trial bundled export |
-| ✅ | Precision recipes | fp32 master weights + bf16 compute wired into the launcher ([`docs/PRECISION.md`](docs/PRECISION.md)) |
 | 🔶 | Agentic ReAct + MCP harness (preview) | Bounded episodes, provenance KB, SkillBank prototype; rollout signal only, not yet a training path ([`docs/AGENTIC.md`](docs/AGENTIC.md)) |
 | 🗺️ | Agentic GSPO training integration | Full ReAct action/observation trajectory into the trainer, aligned terminal reward |
 | 🗺️ | Skill evolution controller | LLM skill distillation/evolution, embedding retrieval, automatic rewriting/pruning |
-| 🗺️ | fp8 KV cache | Knob exposed (`KV_DTYPE=fp8`); quantify sampler↔trainer logprob drift before defaulting |
 | 🗺️ | Async depth tuning | Map staleness vs collapse risk on more tasks; one-step-off-policy middle point |
-| 🗺️ | FSDP path for >3B | Validated single-node config in `examples/accelerate/`; LoRA arms stay on DDP |
 | 🗺️ | More algorithms | DPO/PPO/KTO come from TRL; reward/watchdog/panel layers are algorithm-agnostic |
 | 🗺️ | VLM/VLA | Image-input GRPO exists in TRL; missing piece is the closed-loop rollout adapter |
+| **Infra** | | |
+| ✅ | Precision stack | Default: **fp32 master weights + bf16 training compute + bf16 rollout inference** ([`docs/PRECISION.md`](docs/PRECISION.md)) |
+| ✅ | fp8 KV cache (H200 default) | 1.82x KV capacity, accuracy-neutral in paired eval; `KV_DTYPE=auto` to opt out |
+| ✅ | Watchdog for unattended runs | In-loop held-out eval, keep-best checkpoint copy, 5 auto-stop rules |
+| 🗺️ | fp8 rollout weights | `ROLLOUT_QUANTIZATION=fp8` smoke-tested; ratio/logprob alignment not yet validated |
+| 🗺️ | FSDP path for >3B | Validated single-node config in `examples/accelerate/`; LoRA arms stay on DDP |
+| **Panel** | | |
+| ✅ | Experiment tracking & panels | SwanLab local mode by default, unified local Home, RL-specific auto HTML report |
+| ✅ | Algorithm-neutral RL trials dashboard | Serves DQN/Suika trial history alongside LLM RL; per-run notes, 37-trial bundled export |
 
 ✅ implemented · 🔶 preview/partial · 🗺️ planned — see [`docs/ROADMAP.md`](docs/ROADMAP.md)
 for scope and explicitly out-of-scope items.
