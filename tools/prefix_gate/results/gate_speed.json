@@ -1,0 +1,28 @@
+{
+ "prod_perseq_rows24576": {
+  "rows": 12,
+  "s_per_group_best": 13.958,
+  "s_all": [
+   18.55,
+   14.24,
+   13.96
+  ],
+  "peak_gb": 14.8,
+  "forwarded_tokens": 248314
+ },
+ "shared_whole_group": {
+  "rows": 1,
+  "s_per_group_best": 8.821,
+  "s_all": [
+   62.23,
+   8.82,
+   9.03
+  ],
+  "peak_gb": 24.4,
+  "forwarded_tokens": 75737
+ },
+ "speedup": 1.582360276612629,
+ "forwarded_token_ratio": 0.3050049534057685,
+ "P": 5568,
+ "comp_mean": 2191.8125
+}

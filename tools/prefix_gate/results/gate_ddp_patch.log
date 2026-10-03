@@ -1,0 +1,39 @@
+The following values were not passed to `accelerate launch` and had defaults used instead:
+		More than one GPU was found, enabling multi-GPU training.
+		If this was unintended please pass in `--num_processes=1`.
+	`--num_machines` was set to a value of `1`
+	`--dynamo_backend` was set to a value of `'no'`
+To avoid this warning pass in values for each of the problematic parameters or run `accelerate config`.
+[W1003 13:48:56.114383839 socket.cpp:207] [c10d] The hostname of the client socket cannot be retrieved. err=-3
+[W1003 13:48:56.114433118 socket.cpp:764] [c10d] The client socket cannot be initialized to connect to [fdff:ffff:6955:0:b0a3:9e32:6955:0]:14996 (errno: 97 - Address family not supported by protocol).
+[W1003 13:49:37.821776673 socket.cpp:207] [c10d] The hostname of the client socket cannot be retrieved. err=-3
+[W1003 13:49:37.821822752 socket.cpp:764] [c10d] The client socket cannot be initialized to connect to [fdff:ffff::]:23802 (errno: 97 - Address family not supported by protocol).
+[W1003 13:49:37.836799681 socket.cpp:207] [c10d] The hostname of the client socket cannot be retrieved. err=-3
+[W1003 13:49:37.836839361 socket.cpp:764] [c10d] The client socket cannot be initialized to connect to [fdff:ffff::]:21759 (errno: 97 - Address family not supported by protocol).
+Current Python version 3.10 is below the recommended 3.11 version. It is recommended to upgrade to Python 3.11 or higher for the best experience.
+Current Python version 3.10 is below the recommended 3.11 version. It is recommended to upgrade to Python 3.11 or higher for the best experience.
+Loading weights:   0%|          | 0/320 [00:00<?, ?it/s]Loading weights:   0%|          | 0/320 [00:00<?, ?it/s]Loading weights:   0%|          | 1/320 [00:00<02:21,  2.26it/s]Loading weights: 100%|██████████| 320/320 [00:00<00:00, 700.89it/s]
+Loading weights:   0%|          | 1/320 [00:00<02:13,  2.39it/s]Loading weights: 100%|██████████| 320/320 [00:00<00:00, 738.78it/s]
+attn_impl kernels-community/flash-attn3 | params trainable 752393024
+attn_impl kernels-community/flash-attn3 | params trainable 752393024
+[transformers] `causal_conv1d_fn` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.
+[transformers] Casting fp32 inputs back to torch.bfloat16 for flash-attn compatibility.
+[transformers] `causal_conv1d_fn` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.
+[transformers] Casting fp32 inputs back to torch.bfloat16 for flash-attn compatibility.
+DDP rank 1 step 0 micro 1 out_dtype torch.float32 stats {'groups': 2, 'seqs': 26, 'forward_tokens': 23899, 'padded_tokens': 23899, 'unshared_tokens': 122203}
+DDP rank 0 step 0 micro 1 out_dtype torch.float32 stats {'groups': 1, 'seqs': 32, 'forward_tokens': 25120, 'padded_tokens': 25120, 'unshared_tokens': 152096}
+/usr/local/lib/python3.10/dist-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+/usr/local/lib/python3.10/dist-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+DDP step 0: grad checks per rank [[2.1453192234039307, -1.881827473640442, -0.016351066529750824], [2.1453192234039307, -1.881827473640442, -0.016351066529750824]] equal=True
+DDP rank 1 step 0 micro 2 out_dtype torch.float32 stats {'groups': 1, 'seqs': 31, 'forward_tokens': 32155, 'padded_tokens': 32155, 'unshared_tokens': 158875}
+DDP rank 0 step 0 micro 2 out_dtype torch.float32 stats {'groups': 1, 'seqs': 20, 'forward_tokens': 16072, 'padded_tokens': 16072, 'unshared_tokens': 92680}
+DDP rank 1 step 1 micro 3 out_dtype torch.float32 stats {'groups': 2, 'seqs': 26, 'forward_tokens': 23899, 'padded_tokens': 23899, 'unshared_tokens': 122203}
+DDP rank 0 step 1 micro 3 out_dtype torch.float32 stats {'groups': 1, 'seqs': 32, 'forward_tokens': 25120, 'padded_tokens': 25120, 'unshared_tokens': 152096}
+DDP rank 1 step 1 micro 4 out_dtype torch.float32 stats {'groups': 1, 'seqs': 31, 'forward_tokens': 32155, 'padded_tokens': 32155, 'unshared_tokens': 158875}
+DDP step 1: grad checks per rank [[2.145503520965576, -1.8889281749725342, -0.01666603982448578], [2.145503520965576, -1.8889281749725342, -0.01666603982448578]] equal=True
+DDP rank 0 step 1 micro 4 out_dtype torch.float32 stats {'groups': 1, 'seqs': 20, 'forward_tokens': 16072, 'padded_tokens': 16072, 'unshared_tokens': 92680}
+DDP_OK micro-steps per rank [4, 4] (no hang, no unused-param error)
+[rank0]:[W1003 13:50:05.227556035 ProcessGroupNCCL.cpp:1624] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+DDP_EXIT 0

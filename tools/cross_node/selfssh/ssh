@@ -1,0 +1,21 @@
+#!/bin/bash
+# ssh shim: run the cross-host launcher (production/v3_1/scripts/run_g32_v3_1.sh) on ONE host.
+# Commands addressed to host "$SELFSSH_HOST" (default: self-local) run locally through bash;
+# everything else goes to the real ssh. Use:
+#   PATH=<repo>/tools/cross_node/selfssh:$PATH SELFSSH_HOST=self-local REMOTE_SSH=self-local \
+#   REMOTE_IP=<this host bond IP> SERVER_GPUS=0,1 REMOTE_GPUS=3 bash run_g32_v3_1.sh full
+# The "remote" headless engines then start on this host, so watchdog/teardown keep working unchanged.
+SELF_HOST="${SELFSSH_HOST:-self-local}"
+REAL_SSH="${SELFSSH_REAL:-/usr/bin/ssh}"
+args=("$@"); host=""; i=0
+while [ $i -lt ${#args[@]} ]; do
+  case "${args[$i]}" in
+    -[bcDEeFIiJLlmOopQRSWw]) i=$((i + 2)) ;;   # options that take a value
+    -*) i=$((i + 1)) ;;
+    *) host=${args[$i]}; i=$((i + 1)); break ;;
+  esac
+done
+if [ "$host" = "$SELF_HOST" ]; then
+  exec bash -c "${args[*]:$i}"
+fi
+exec "$REAL_SSH" "$@"

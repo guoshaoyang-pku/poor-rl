@@ -1,0 +1,142 @@
+--- src/rlforge/prefix_share.py	2026-10-03 13:26:57.000000000 +0800
++++ gate_out/patch_snapshot/rlforge/prefix_share.py	2026-10-03 13:48:24.258716647 +0800
+@@ -36,6 +36,8 @@
+ 
+ from __future__ import annotations
+ 
++import os
++
+ import torch
+ import torch.nn.functional as F
+ from torch.utils.checkpoint import checkpoint
+@@ -46,6 +48,32 @@
+ # working set when SDPA falls back to a kernel that materializes it.
+ ATTN_ROWS = 8
+ 
++# [v3-gate patch] Split point alignment. The prompt is shared up to the largest multiple of ALIGN that is <= p-1;
++# the remaining prompt tail (< ALIGN tokens) is duplicated into every branch. With ALIGN = 64 = FLA's
++# chunk_gated_delta_rule block size, the branch's GatedDeltaNet chunks fall on exactly the same absolute positions
++# as in the unshared forward and the prompt pass ends on a chunk boundary, so the delta-rule numerics match the
++# per-sequence path instead of differing by a re-chunking. ALIGN=1 restores the original split (prefix = p-1).
++ALIGN = int(os.environ.get("RLFORGE_PREFIX_ALIGN", "64"))
++
++
++def _use_flash(cfg):
++    """[v3-gate patch] True when the model was loaded with a FlashAttention implementation (production: TRL loads
++    kernels-community/flash-attn3). The prefix path then calls the model's own attention interface, i.e. the same FA
++    kernel the per-sequence path uses, instead of torch SDPA with a boolean mask."""
++    impl = getattr(cfg, "_attn_implementation", None) or ""
++    return "flash" in impl and os.environ.get("RLFORGE_PREFIX_SDPA", "0") != "1"
++
++
++def _flash(attn, q, k, v):
++    """q [B,H,Lq,D], k/v [B,Hkv,Lk,D] (GQA native) -> [B,Lq,H,D]. Lq < Lk with causal=True is bottom-right aligned in
++    FA>=2.1 / FA3: query i sees keys 0..Lk-Lq+i = whole prompt + own causal prefix."""
++    from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
++    from transformers.models.qwen3_5.modeling_qwen3_5 import eager_attention_forward
++
++    fn = ALL_ATTENTION_FUNCTIONS.get_interface(attn.config._attn_implementation, eager_attention_forward)
++    o, _ = fn(attn, q, k, v, None, dropout=0.0, scaling=attn.scaling, is_causal=True)
++    return o
++
+ 
+ def _unwrap(model):
+     while hasattr(model, "module"):  # DDP / accelerate wrappers
+@@ -152,10 +180,17 @@
+ 
+ def _attn_group(attn, x_p, x_bs, pe_p, pe_bs, masks):
+     rep = attn.num_key_value_groups
++    flash = _use_flash(attn.config)
+     q_p, k_p, v_p, g_p = _attn_project(attn, x_p, pe_p)
+-    k_pr, v_pr = k_p.repeat_interleave(rep, 1), v_p.repeat_interleave(rep, 1)
+-    o_p = F.scaled_dot_product_attention(q_p, k_pr, v_pr, is_causal=True, scale=attn.scaling)
+-    y_p = _attn_finish(attn, o_p, g_p, x_p.shape[:-1])
++    if flash:
++        # identical op order to Qwen3_5Attention.forward: reshape(...).contiguous() * sigmoid(gate) -> o_proj
++        o_p = _flash(attn, q_p, k_p, v_p)
++        y_p = attn.o_proj(o_p.reshape(*x_p.shape[:-1], -1).contiguous() * torch.sigmoid(g_p))
++        k_pr, v_pr = k_p, v_p
++    else:
++        k_pr, v_pr = k_p.repeat_interleave(rep, 1), v_p.repeat_interleave(rep, 1)
++        o_p = F.scaled_dot_product_attention(q_p, k_pr, v_pr, is_causal=True, scale=attn.scaling)
++        y_p = _attn_finish(attn, o_p, g_p, x_p.shape[:-1])
+     if _DETACH:
+         k_pr, v_pr = k_pr.detach(), v_pr.detach()
+     y_bs = []
+@@ -165,10 +200,19 @@
+         for s in range(0, x_b.shape[0], ATTN_ROWS):
+             e = min(x_b.shape[0], s + ATTN_ROWS)
+             n = e - s
+-            K = torch.cat([k_pr.expand(n, -1, -1, -1), k_b[s:e].repeat_interleave(rep, 1)], dim=2)
+-            V = torch.cat([v_pr.expand(n, -1, -1, -1), v_b[s:e].repeat_interleave(rep, 1)], dim=2)
+-            outs.append(F.scaled_dot_product_attention(q_b[s:e], K, V, attn_mask=mask, scale=attn.scaling))
+-        y_bs.append(_attn_finish(attn, torch.cat(outs, 0), g_b, x_b.shape[:-1]))
++            if flash:
++                K = torch.cat([k_pr.expand(n, -1, -1, -1), k_b[s:e]], dim=2)
++                V = torch.cat([v_pr.expand(n, -1, -1, -1), v_b[s:e]], dim=2)
++                outs.append(_flash(attn, q_b[s:e], K, V))
++            else:
++                K = torch.cat([k_pr.expand(n, -1, -1, -1), k_b[s:e].repeat_interleave(rep, 1)], dim=2)
++                V = torch.cat([v_pr.expand(n, -1, -1, -1), v_b[s:e].repeat_interleave(rep, 1)], dim=2)
++                outs.append(F.scaled_dot_product_attention(q_b[s:e], K, V, attn_mask=mask, scale=attn.scaling))
++        o = torch.cat(outs, 0)
++        if flash:
++            y_bs.append(attn.o_proj(o.reshape(*x_b.shape[:-1], -1).contiguous() * torch.sigmoid(g_b)))
++        else:
++            y_bs.append(_attn_finish(attn, o, g_b, x_b.shape[:-1]))
+     return y_p, y_bs
+ 
+ 
+@@ -218,9 +262,12 @@
+         pos_b = (P + torch.arange(Lb, device=dev))[None, None].expand(3, -1, -1)
+         h_bs.append(h)
+         pe_bs.extend(bb.rotary_emb(h, pos_b))  # batch 1, broadcasts over the bucket rows
+-        j = torch.arange(Lb, device=dev)[:, None]
+-        i = torch.arange(P + Lb, device=dev)[None]
+-        masks.append((i < P) | (i - P <= j))  # [Lb, P+Lb]: whole prompt + own causal prefix
++        if _use_flash(bb.config):
++            masks.append(None)  # FA: causal bottom-right alignment encodes the same mask, nothing materialised
++        else:
++            j = torch.arange(Lb, device=dev)[:, None]
++            i = torch.arange(P + Lb, device=dev)[None]
++            masks.append((i < P) | (i - P <= j))  # [Lb, P+Lb]: whole prompt + own causal prefix
+     n_b = len(buckets)
+     # HF sets the flag on the GradientCheckpointingLayer modules; we call their sub-modules directly
+     # (so they never checkpoint themselves) and checkpoint the prompt+branches per layer instead.
+@@ -286,16 +333,18 @@
+         if p is None:  # no completion / no prompt: score it as its own 1-token-prefix group
+             p = 1
+         a0 = segs[0][0]
+-        prefix = ids[a0 : a0 + p - 1]
+-        # Branch k = last prompt token + completion, so the first completion token is predicted in-branch.
+-        lens = [e - (a + p - 1) for a, e in segs]
++        P = ((p - 1) // ALIGN) * ALIGN  # shared prefix length; ALIGN=1 -> p-1 (original split)
++        prefix = ids[a0 : a0 + P]
++        # Branch k = prompt tail [P, p) (>= the last prompt token) + completion, so the first completion token is
++        # predicted in-branch.
++        lens = [e - (a + P) for a, e in segs]
+         buckets = _buckets(lens)
+         brs = []
+         for bk in buckets:
+             br = ids.new_zeros((len(bk), lens[bk[0]]))
+             for r, k in enumerate(bk):
+                 a, e = segs[k]
+-                br[r, : lens[k]] = ids[a + p - 1 : e]
++                br[r, : lens[k]] = ids[a + P : e]
+             brs.append(br)
+         stats["forward_tokens"] += prefix.numel() + sum(lens)
+         stats["padded_tokens"] += prefix.numel() + sum(b.numel() for b in brs)
+@@ -307,11 +356,11 @@
+             for r, k in enumerate(bk):
+                 a, e = segs[k]
+                 j = torch.arange(lens[k] - 1, device=dev)
+-                keep = cm[a + p : e].bool()
++                keep = cm[a + P + 1 : e].bool()
+                 j = j[keep]
+                 hid.append(h[r, j])
+                 tgt.append(br[r, j + 1])
+-                slot_idx.append(a + p - 1 + j)
++                slot_idx.append(a + P + j)
+     lp, ent = _logprob_fn(lm, torch.cat(hid), torch.cat(tgt), temperature, chunk_size)
+     slots = torch.cat(slot_idx)
+     log_probs = torch.zeros(T - 1, device=dev, dtype=lp.dtype).index_put((slots,), lp)

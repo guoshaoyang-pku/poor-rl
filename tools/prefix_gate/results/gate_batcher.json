@@ -1,0 +1,72 @@
+{
+ "GroupRowBatcher_R4_long0.1": {
+  "microbatches": 94,
+  "empty_rows": 0,
+  "samples_per_mb": [
+   128
+  ],
+  "max_row_shared_tokens": 224979,
+  "rows_with_2+_groups": 106
+ },
+ "GroupRowBatcher_R4_long0.5": {
+  "microbatches": 95,
+  "empty_rows": 0,
+  "samples_per_mb": [
+   128
+  ],
+  "max_row_shared_tokens": 444300,
+  "rows_with_2+_groups": 357
+ },
+ "GroupRowBatcher_R4_long1.0": {
+  "microbatches": 94,
+  "empty_rows": 0,
+  "samples_per_mb": [
+   128
+  ],
+  "max_row_shared_tokens": 627447,
+  "rows_with_2+_groups": 376
+ },
+ "GroupTokenBudgetBatcher_R4": {
+  "microbatches": 426,
+  "empty_rows": 0,
+  "samples_per_mb_min_max": [
+   4,
+   25
+  ]
+ },
+ "GroupRowBatcher_R5_long0.1": {
+  "microbatches": 75,
+  "empty_rows": 0,
+  "samples_per_mb": [
+   160
+  ],
+  "max_row_shared_tokens": 245251,
+  "rows_with_2+_groups": 97
+ },
+ "GroupRowBatcher_R5_long0.5": {
+  "microbatches": 75,
+  "empty_rows": 0,
+  "samples_per_mb": [
+   160
+  ],
+  "max_row_shared_tokens": 459735,
+  "rows_with_2+_groups": 360
+ },
+ "GroupRowBatcher_R5_long1.0": {
+  "microbatches": 75,
+  "empty_rows": 0,
+  "samples_per_mb": [
+   160
+  ],
+  "max_row_shared_tokens": 630896,
+  "rows_with_2+_groups": 375
+ },
+ "GroupTokenBudgetBatcher_R5": {
+  "microbatches": 327,
+  "empty_rows": 0,
+  "samples_per_mb_min_max": [
+   8,
+   31
+  ]
+ }
+}
