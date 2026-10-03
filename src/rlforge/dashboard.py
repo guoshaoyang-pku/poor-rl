@@ -33,8 +33,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from rlforge.report import parse_eval_history, parse_task_split, parse_trainer_log
-from rlforge.rl_trials import DQNTrialAdapter, TrialRegistry
-from rlforge.rl_panel import RL_PANEL_HTML
 
 _PROGRESS_RE = re.compile(r"(?:^|[\r\n])([^\r\n]*?)(\d+)/(\d+)\s+\[")
 _LIVE_WINDOW_S = 600  # trainer log touched within 10 min -> run counts as live
@@ -95,10 +93,6 @@ class State:
         self.min_steps = args.min_steps
         self._specs = {}
         self._cache = {}  # (run_name, key) -> (mtime, value)
-        self.trials = TrialRegistry()
-        self.has_rl_panel = bool(getattr(args, "rl_data_root", None))
-        if self.has_rl_panel:
-            self.trials.register(DQNTrialAdapter(args.rl_data_root, getattr(args, "rl_ledger", None)))
         if args.run:
             spec = RunSpec(Path(args.run).name, args.run, args.trainer_log,
                            args.eval_history, args.base_eval)
@@ -459,21 +453,7 @@ tick(); setInterval(tick, 10000);
 def make_handler(state: State):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path.startswith("/api/rl/overview"):
-                body = json.dumps(state.trials.list_overview()).encode()
-                self._reply(200, body, "application/json")
-            elif self.path.startswith("/api/rl/trials"):
-                body = json.dumps([record.__dict__ for record in state.trials.list_trials()]).encode()
-                self._reply(200, body, "application/json")
-            elif self.path.startswith("/api/rl/trial"):
-                from urllib.parse import parse_qs, urlparse
-                query = parse_qs(urlparse(self.path).query)
-                trial_id = (query.get("id") or [""])[0]
-                trial = state.trials.get_trial(trial_id)
-                status = 200 if trial is not None else 404
-                body = json.dumps(trial or {"error": "trial not found"}).encode()
-                self._reply(status, body, "application/json")
-            elif self.path.startswith("/api/metrics"):
+            if self.path.startswith("/api/metrics"):
                 from urllib.parse import urlparse, parse_qs
                 q = parse_qs(urlparse(self.path).query)
                 name = (q.get("run") or [None])[0]
@@ -487,8 +467,6 @@ def make_handler(state: State):
                 self._reply(200, body, "application/json")
             elif self.path.startswith("/api/runs"):
                 self._reply(200, json.dumps(state.list_runs()).encode(), "application/json")
-            elif self.path in ("/", "/index.html") and state.has_rl_panel:
-                self._reply(200, RL_PANEL_HTML.encode(), "text/html; charset=utf-8")
             elif self.path in ("/", "/index.html"):
                 self._reply(200, _HTML.encode(), "text/html; charset=utf-8")
             else:
@@ -518,17 +496,13 @@ def main():
     ap.add_argument("--trainer-log", default=None)
     ap.add_argument("--eval-history", default=None)
     ap.add_argument("--base-eval", default=None)
-    ap.add_argument("--rl-data-root", default=None,
-                    help="root of algorithm-neutral RL trial data; enables the RL panel")
-    ap.add_argument("--rl-ledger", default=None,
-                    help="optional historical trial JSON ledger, default: <rl-data-root>/trials.json")
     ap.add_argument("--min-steps", type=int, default=50,
                     help="hide finished runs with fewer logged steps (short/aborted trials)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8871)
     args = ap.parse_args()
-    if not args.root and not args.run and not args.rl_data_root:
-        ap.error("provide --root, --run, or --rl-data-root")
+    if not args.root and not args.run:
+        ap.error("either --root (multi-run trail) or --run (single run) is required")
     state = State(args)
     srv = ThreadingHTTPServer((args.host, args.port), make_handler(state))
     print(f"[dashboard] http://{args.host}:{args.port} "

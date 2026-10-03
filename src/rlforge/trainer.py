@@ -15,7 +15,6 @@ import json
 import os
 import time
 from functools import partial
-from pathlib import Path
 
 import torch
 from datasets import Dataset
@@ -23,9 +22,52 @@ from datasets import Dataset
 from trl.experimental.async_grpo import AsyncGRPOConfig, AsyncGRPOTrainer
 from trl.trainer.utils import nanmax, nanmin
 
-from rlforge.gspo import adaptive_clip_eps
-from rlforge.hybrid_packing import boundary_aware_packing, install as install_packing
 from rlforge.rewards import load_reward_fn
+
+
+def _has_linear_attention(model) -> bool:
+    """True for hybrid models whose config lists linear-attention (GatedDeltaNet/Mamba-like) layers."""
+    cfg = getattr(model, "config", None)
+    if cfg is None:
+        return False
+    tc = cfg.get_text_config() if hasattr(cfg, "get_text_config") else cfg
+    layer_types = getattr(tc, "layer_types", None) or []
+    return any("linear" in str(t) or "mamba" in str(t) for t in layer_types)
+
+
+def per_seq_logprobs(model, input_ids, position_ids, completion_mask):
+    """Run the packed (1, T) row as ONE right-padded (n_seq, L_max) batch so every sequence
+    is computed in isolation, then scatter (log_probs, entropy) back into the packed
+    (1, T-1) layout. The boundary slot (last token of sequence k predicting the first token
+    of k+1) is a prompt position and gets 0.
+
+    One forward per micro-batch (not one per sequence): under DDP every forward issues
+    collectives (buffer broadcast), so a per-sequence loop deadlocks as soon as ranks hold
+    rows with different sequence counts (2026-10-03, step 3 hang). Right padding is exact
+    for causal models: pad tokens sit after every real token and are masked."""
+    T = input_ids.shape[1]
+    starts = (position_ids[0] == 0).nonzero().flatten().tolist()
+    bounds = list(zip(starts, starts[1:] + [T]))
+    n = len(bounds)
+    L = max(e - a for a, e in bounds)
+    ids = input_ids.new_zeros((n, L))
+    attn = input_ids.new_zeros((n, L))
+    cmask = completion_mask.new_zeros((n, L))
+    for i, (a, e) in enumerate(bounds):
+        ids[i, : e - a] = input_ids[0, a:e]
+        attn[i, : e - a] = 1
+        cmask[i, : e - a] = completion_mask[0, a:e]
+    pos = torch.arange(L, device=input_ids.device).unsqueeze(0).expand(n, -1)
+    out = model(input_ids=ids, attention_mask=attn, position_ids=pos, labels=ids,
+                completion_mask=cmask, use_cache=False)
+    lp_pad, ent_pad = out["log_probs"], out["entropy"]
+    log_probs = lp_pad.new_zeros((1, T - 1))
+    entropy = ent_pad.new_zeros((1, T - 1))
+    for i, (a, e) in enumerate(bounds):
+        log_probs[0, a : e - 1] = lp_pad[i, : e - a - 1]
+        entropy[0, a : e - 1] = ent_pad[i, : e - a - 1]
+    return log_probs, entropy, n
+
 
 class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
     """AsyncGRPO with GSPO-style sequence-level importance sampling.
@@ -49,28 +91,150 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         in __init__ rather than in compute_loss so a sweep only touches the launcher.
     """
 
-    def __init__(
-        self,
-        *args,
-        gspo_norm: str = "seq_mean",
-        adaptive_clip_low_max: float | None = None,
-        adaptive_clip_high_max: float | None = None,
-        gspo_eps_max: float = 0.1,
-        **kwargs,
-    ):
+    def __init__(self, *args, gspo_norm: str = "seq_mean",
+                 gspo_dynamic_low_frac: float = 0.0, per_seq_forward: str = "auto",
+                 kl_beta: float = 0.0, prefix_share: bool = False, subbatch_tokens: int = 0,
+                 sb_ckpt: str = "all", **kwargs):
         super().__init__(*args, **kwargs)
+        # [v3_2] token-budgeted sub-batches (prefix-share only): forward+backward per sub-batch of <= subbatch_tokens
+        # padded tokens; sb_ckpt = which decoder layers are checkpointed inside a sub-batch: all | none | auto
+        # (auto: as few as fit RLFORGE_SB_ACT_GB of activations, from the per-token costs RLFORGE_SB_MEM_*_KB).
+        self._sb_tokens = int(subbatch_tokens or 0)
+        if sb_ckpt not in ("all", "none", "auto"):
+            raise ValueError(f"unknown sb_ckpt {sb_ckpt!r}")
+        self._sb_ckpt = sb_ckpt
+        if self._sb_tokens and not prefix_share:
+            raise ValueError("--subbatch-tokens requires --prefix-share on")
+        # KL-to-reference (frozen copy of the starting policy): k3 estimator on completion
+        # tokens, seq-mean then mean over sequences; added to the GSPO loss with weight
+        # kl_beta. Off (0) by default, which keeps the previous behaviour bit-for-bit.
+        self._kl_beta = float(kl_beta)
+        self._ref_model = None
+        if self._kl_beta > 0:
+            import copy, os as _os
+            _ref_path = _os.environ.get("RLFORGE_REF_MODEL", "")
+            base = self.accelerator.unwrap_model(self.model)
+            if _ref_path:
+                # explicit frozen reference (lets a run resume from a later checkpoint while
+                # keeping an earlier KL anchor); same class / attention impl as the policy
+                self._ref_model = type(base).from_pretrained(
+                    _ref_path, torch_dtype=torch.bfloat16,
+                    attn_implementation=base.config._attn_implementation).to(base.device).eval()
+                anchor = _ref_path
+            else:
+                self._ref_model = copy.deepcopy(base).to(torch.bfloat16).eval()
+                anchor = "start policy"
+            self._ref_model.requires_grad_(False)
+            print(f"[rlforge] kl_beta={self._kl_beta} (frozen reference = {anchor})", flush=True)
+        # Shared-prompt forward (rlforge.prefix_share): each group's prompt is forwarded once and its
+        # completions branch from it. Installed AFTER the reference deepcopy and on each model
+        # separately; the forward is a bound method, so a later deepcopy would also stay correct.
+        self._prefix_share = bool(prefix_share)
+        if self._prefix_share:
+            from rlforge.prefix_share import install
+            install(self.model, temperature=self.temperature)
+            if self._ref_model is not None:
+                install(self._ref_model, temperature=self.temperature)
+            print("[rlforge] prefix_share=on (prompt forwarded once per group; overrides per_seq_forward)",
+                  flush=True)
+        hybrid = _has_linear_attention(self.model)
+        if per_seq_forward == "auto":
+            self._per_seq_forward = hybrid
+        else:
+            self._per_seq_forward = per_seq_forward == "on"
+        self._per_seq_calls = 0
+        print(f"[rlforge] per_seq_forward={self._per_seq_forward} "
+              f"(mode={per_seq_forward}, linear_attention_layers={hybrid})", flush=True)
+        if hybrid and not self._per_seq_forward:
+            print("[rlforge] WARNING: hybrid linear-attention model trained with packed rows; "
+                  "recurrent/conv state leaks across sequence boundaries", flush=True)
         if gspo_norm not in ("token", "seq_mean"):
             raise ValueError(f"unknown gspo_norm {gspo_norm!r}")
-        if (adaptive_clip_low_max is None) != (adaptive_clip_high_max is None):
-            raise ValueError("both adaptive clip-fraction caps must be set together")
         self._gspo_norm = gspo_norm
-        self._adaptive_clip_low_max = adaptive_clip_low_max
-        self._adaptive_clip_high_max = adaptive_clip_high_max
-        self._gspo_eps_max = gspo_eps_max
+        # Dynamic low clip: bound = exp(EMA of this quantile of per-seq log-ratio),
+        # updated AFTER each micro-batch, so the bound in effect is always the
+        # previous average (first micro-batch falls back to the fixed eps_low).
+        self._dyn_low_frac = float(gspo_dynamic_low_frac)
+        self._dyn_low_ema = None
+        # v3 audits (rlforge_v3, 2026-10-03), no collectives:
+        #  * mb_audit: every rank prints its own micro-batch / row-sequence count per optimizer
+        #    step (first RLFORGE_MB_AUDIT_STEPS steps, then every 50) -- DDP needs equal counts.
+        #  * poslog (gate 5): per-sequence mean log-ratio with the sequence's position inside its
+        #    prompt group, for the first RLFORGE_POSLOG_STEPS optimizer steps, one jsonl per rank.
+        self._mb_audit_steps = int(os.environ.get("RLFORGE_MB_AUDIT_STEPS", "20"))
+        self._audit_local_seqs = 0
+        self._poslog_dir = os.environ.get("RLFORGE_POSLOG_DIR") or None
+        self._poslog_steps = int(os.environ.get("RLFORGE_POSLOG_STEPS", "0"))
+        self._poslog_mb = 0
+        if self._sb_tokens:
+            tc = self.accelerator.unwrap_model(self.model).config.get_text_config()
+            self._sb_n_layers = int(tc.num_hidden_layers)
+            self._sb_act_bytes = float(os.environ.get("RLFORGE_SB_ACT_GB", "90")) * 2**30
+            self._sb_kb_full = float(os.environ.get("RLFORGE_SB_MEM_FULL_KB", "100"))
+            self._sb_kb_ckpt = float(os.environ.get("RLFORGE_SB_MEM_CKPT_KB", "8"))
+            self._sb_kb_base = float(os.environ.get("RLFORGE_SB_MEM_BASE_KB", "64"))
+            self._sb_calls = 0
+            print(f"[rlforge] v3_2 subbatch_tokens={self._sb_tokens} sb_ckpt={self._sb_ckpt} "
+                  f"(layers={self._sb_n_layers} act_gb={self._sb_act_bytes / 2**30:.0f} kb/tok/layer full="
+                  f"{self._sb_kb_full} ckpt={self._sb_kb_ckpt} base={self._sb_kb_base}) "
+                  f"bucket_lam={os.environ.get('RLFORGE_SB_BUCKET_LAM', '1024')}", flush=True)
+
+    def _write_poslog(self, input_ids, position_ids, completion_mask, seq_mean_lr, seq_n_tok):
+        """Gate 5 (per-position bias): one line per sequence of this rank's row with its index in
+        row order inside its prompt group (k_row) and in the order the shared path processes it
+        (k_proc: length-descending, as prefix_share._buckets). Best effort, never raises."""
+        try:
+            from rlforge.prefix_share import plan_groups
+            rank = self.accelerator.process_index
+            T = input_ids.shape[1]
+            starts = (position_ids[0] == 0).nonzero().flatten().tolist()
+            seq_index = {a: j for j, a in enumerate(starts)}
+            lr = seq_mean_lr.detach().float().cpu().tolist()
+            nt = seq_n_tok.detach().float().cpu().tolist()
+            lines = []
+            for gi, (p, segs) in enumerate(plan_groups(input_ids, position_ids, completion_mask)):
+                lens = [e - a for a, e in segs]
+                proc = sorted(range(len(segs)), key=lambda k: -lens[k])
+                k_proc = {k: r for r, k in enumerate(proc)}
+                for k, (a, e) in enumerate(segs):
+                    j = seq_index[a]
+                    lines.append(json.dumps({
+                        "step": int(self.state.global_step), "mb": self._poslog_mb, "rank": rank,
+                        "group": gi, "group_size": len(segs), "prompt_len": p, "k_row": k,
+                        "k_proc": k_proc[k], "seq_len": e - a, "n_tok": nt[j], "log_rho": lr[j]}))
+            os.makedirs(self._poslog_dir, exist_ok=True)
+            with open(os.path.join(self._poslog_dir, f"poslog_rank{rank}.jsonl"), "a") as f:
+                f.write("\n".join(lines) + "\n")
+            self._poslog_mb += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"[rlforge] poslog skipped: {type(e).__name__}: {e}", flush=True)
+
+    def _log_step_metrics(self):
+        step = int(self.state.global_step)
+        if step <= self._mb_audit_steps or step % 50 == 0:
+            print(f"[rlforge][mb_audit] rank={self.accelerator.process_index} step={step} "
+                  f"microbatches={self._step_microbatches} local_seqs={self._audit_local_seqs} "
+                  f"global_samples={self._step_samples:.0f}", flush=True)
+        self._audit_local_seqs = 0
+        super()._log_step_metrics()
+
+    def _sb_ckpt_layers(self, tokens):
+        """Decoder layers to checkpoint for a sub-batch of ``tokens`` padded tokens (v3_2)."""
+        L = self._sb_n_layers
+        if self._sb_ckpt == "all":
+            return set(range(L))
+        if self._sb_ckpt == "none":
+            return set()
+        per_tok = self._sb_act_bytes / max(tokens, 1) / 1024.0 - self._sb_kb_base  # KB per token for the layers
+        n_full = int((per_tok - L * self._sb_kb_ckpt) // max(self._sb_kb_full - self._sb_kb_ckpt, 1e-9))
+        n_full = max(0, min(L, n_full))
+        return set(range(L - n_full))  # the LAST n_full layers keep their activations
 
     def compute_loss(
         self, model, inputs, return_outputs=False, num_items_in_batch=None
     ):
+        if self._sb_tokens:
+            return self._compute_loss_subbatched(model, inputs)
         mask_bool = inputs["attention_mask"].bool()
         input_ids = inputs["input_ids"][mask_bool].unsqueeze(0)
         completion_mask = inputs["completion_mask"][mask_bool].unsqueeze(0)
@@ -79,13 +243,31 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         advantages = inputs["advantages"][mask_bool].unsqueeze(0)
 
         forward_start = time.perf_counter()
-        # Padding-free packing concatenates several samples into this one row and resets
-        # position_ids at each sample boundary. The attention layers honour that via the
-        # block-diagonal mask, but the GatedDeltaNet layers do not receive the boundaries at all
-        # unless we hand them over here. Without this, the conv window and recurrent state of
-        # sample i leak into sample i+1 (measured: +0.489 / +1.142 nats on segments 1/2 of a
-        # 3-way packed row), which inflates the trainer's logprobs and pins seq_clip_low_frac.
-        with boundary_aware_packing(position_ids):
+        if self._prefix_share:
+            outputs = model(prefix_share=dict(input_ids=input_ids, position_ids=position_ids,
+                                              completion_mask=completion_mask))
+            log_probs, entropy = outputs["log_probs"], outputs["entropy"]
+            ps = outputs["prefix_share_stats"]
+            m = self._metrics["train"]
+            m["prefix_share/forward_token_frac"].append(ps["forward_tokens"] / max(ps["unshared_tokens"], 1))
+            m["prefix_share/pad_frac"].append(1 - ps["forward_tokens"] / max(ps["padded_tokens"], 1))
+            m["prefix_share/seqs_per_group"].append(ps["seqs"] / max(ps["groups"], 1))
+            if self.aux_loss_enabled:
+                raise NotImplementedError("prefix-share forward does not aggregate MoE aux loss")
+        elif self._per_seq_forward:
+            # Hybrid models (Qwen3.5 GatedDeltaNet: causal conv + recurrent state) do NOT
+            # reset state at packed-sequence boundaries without fla/causal_conv1d varlen
+            # kernels, so a packed row leaks state from sequence i into i+1 (2026-10-03:
+            # packed-vs-clean logprob gap -0.1..-0.6, growing with pack position). Run each
+            # sequence alone and stitch the outputs back into the packed layout: the
+            # boundary slot (last token of i predicting first token of i+1) is a prompt
+            # position (completion_mask 0) and is filled with 0.
+            log_probs, entropy, n_calls = per_seq_logprobs(model, input_ids, position_ids, completion_mask)
+            self._per_seq_calls += n_calls
+            outputs = {"log_probs": log_probs, "entropy": entropy}
+            if self.aux_loss_enabled:
+                raise NotImplementedError("per-seq forward does not aggregate MoE aux loss")
+        else:
             outputs = model(
                 input_ids=input_ids,
                 position_ids=position_ids,
@@ -93,7 +275,7 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
                 completion_mask=completion_mask,
                 use_cache=False,
             )
-        log_probs, entropy = outputs["log_probs"], outputs["entropy"]
+            log_probs, entropy = outputs["log_probs"], outputs["entropy"]
         self._last_forward_time_s = time.perf_counter() - forward_start
 
         completion_mask = completion_mask[:, 1:]
@@ -113,29 +295,26 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         seq_lr_sum = zeros.index_add(0, seq_ids, log_ratio[0] * valid)
         seq_n_tok = zeros.index_add(0, seq_ids, valid.to(log_ratio.dtype))
         seq_mean_lr = seq_lr_sum / seq_n_tok.clamp(min=1.0)
+        self._audit_local_seqs += num_seq
+        if self._poslog_dir and self.state.global_step < self._poslog_steps:
+            self._write_poslog(input_ids, position_ids, inputs["completion_mask"][mask_bool].unsqueeze(0),
+                               seq_mean_lr, seq_n_tok)
         rho = torch.exp(seq_mean_lr)  # (num_seq,) sequence-level IS ratio
-        valid = valid & (seq_n_tok[seq_ids] > 0)
-        adv = advantages[0]
-        seq_adv_sum = zeros.index_add(0, seq_ids, adv * valid)
-        seq_adv = seq_adv_sum / seq_n_tok.clamp(min=1.0)
-        eps_low = self.epsilon_low
-        eps_high = self.epsilon_high
-        if self._adaptive_clip_low_max is not None:
-            global_rho = self.accelerator.gather(rho.detach())
-            eps_low, eps_high = adaptive_clip_eps(
-                global_rho,
-                eps_low,
-                eps_high,
-                self._adaptive_clip_low_max,
-                self._adaptive_clip_high_max,
-                self._gspo_eps_max,
-            )
-            self._metrics["train"]["gspo/eps_low"].append(eps_low)
-            self._metrics["train"]["gspo/eps_high"].append(eps_high)
-        rho_clipped = torch.clamp(rho, 1 - eps_low, 1 + eps_high)
+        low_bound = 1 - self.epsilon_low
+        if self._dyn_low_frac > 0:
+            if self._dyn_low_ema is not None:
+                low_bound = float(torch.exp(self._dyn_low_ema))
+            with torch.no_grad():
+                q = torch.quantile(seq_mean_lr.detach().float(), self._dyn_low_frac)
+                self._dyn_low_ema = (
+                    q if self._dyn_low_ema is None
+                    else 0.9 * self._dyn_low_ema + 0.1 * q
+                )
+        rho_clipped = torch.clamp(rho, low_bound, 1 + self.epsilon_high)
 
         rho_tok = rho[seq_ids]  # (T-1,) broadcast to tokens
         rho_clip_tok = rho_clipped[seq_ids]
+        adv = advantages[0]
         per_token_loss = -torch.min(rho_tok * adv, rho_clip_tok * adv)
 
         global_n_tokens = inputs["global_n_tokens"][0]
@@ -152,6 +331,26 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
             world_size = self.accelerator.num_processes
             tokens_per_rank = (global_n_tokens / world_size).clamp(min=1.0)
             loss = loss / tokens_per_rank.to(torch.float32)
+        kl_seq_mean = None
+        if self._ref_model is not None:
+            with torch.no_grad():
+                if self._prefix_share:
+                    ref_lp = self._ref_model(prefix_share=dict(
+                        input_ids=input_ids, position_ids=position_ids,
+                        completion_mask=inputs["completion_mask"][mask_bool].unsqueeze(0)))["log_probs"]
+                elif self._per_seq_forward:
+                    ref_lp, _, _ = per_seq_logprobs(self._ref_model, input_ids, position_ids,
+                                                    inputs["completion_mask"][mask_bool].unsqueeze(0))
+                else:
+                    ref_lp = self._ref_model(input_ids=input_ids, position_ids=position_ids,
+                                             labels=input_ids, completion_mask=inputs["completion_mask"][mask_bool].unsqueeze(0),
+                                             use_cache=False)["log_probs"]
+            d = (ref_lp.detach() - log_probs)[0]
+            k3 = torch.exp(d) - d - 1.0
+            kl_seq = torch.zeros(num_seq, device=k3.device, dtype=k3.dtype).index_add_(
+                0, seq_ids, k3 * valid) / seq_n_tok.clamp(min=1.0)
+            kl_seq_mean = kl_seq.mean()
+            loss = loss + self._kl_beta * kl_seq_mean
         loss = loss / self.current_gradient_accumulation_steps
 
         if self.aux_loss_enabled:
@@ -203,6 +402,9 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
                 (global_ratio_sum / global_count).item()
             )
             self._metrics["train"]["kl"].append((global_kl_sum / global_count).item())
+            if kl_seq_mean is not None:
+                self._metrics["train"]["kl_ref"].append(
+                    self.accelerator.gather(kl_seq_mean.detach().float().reshape(1)).mean().item())
             self._metrics["train"]["entropy"].append(
                 (global_entropy_sum / global_count).item()
             )
@@ -221,17 +423,12 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
             # clip block above reports the parent's quantities, which arm C's numbers
             # showed can look calm while the sequence clip does all the work.
             abs_log_rho = seq_mean_lr.detach().abs()
-            global_log_rho = self.accelerator.gather(seq_mean_lr.detach())
-            seq_low_frac = (rho < 1 - eps_low).float().mean()
-            seq_high_frac = (rho > 1 + eps_high).float().mean()
-            seq_active_low_frac = ((rho < 1 - eps_low) & (seq_adv < 0)).float().mean()
-            seq_active_high_frac = ((rho > 1 + eps_high) & (seq_adv > 0)).float().mean()
+            seq_low_frac = (rho < low_bound).float().mean()
+            seq_high_frac = (rho > 1 + self.epsilon_high).float().mean()
             seq_stats = torch.stack(
                 [
                     seq_low_frac,
                     seq_high_frac,
-                    seq_active_low_frac,
-                    seq_active_high_frac,
                     abs_log_rho.mean(),
                     abs_log_rho.max(),
                 ]
@@ -242,30 +439,24 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
             self._metrics["train"]["gspo/seq_clip_high_frac"].append(
                 self.accelerator.reduce(seq_stats[1], reduction="mean").item()
             )
-            self._metrics["train"]["gspo/seq_active_clip_low_frac"].append(
+            self._metrics["train"]["gspo/abs_log_rho_mean"].append(
                 self.accelerator.reduce(seq_stats[2], reduction="mean").item()
             )
-            self._metrics["train"]["gspo/seq_active_clip_high_frac"].append(
-                self.accelerator.reduce(seq_stats[3], reduction="mean").item()
-            )
-            self._metrics["train"]["gspo/abs_log_rho_mean"].append(
-                self.accelerator.reduce(seq_stats[4], reduction="mean").item()
-            )
             self._metrics["train"]["gspo/abs_log_rho_max"].append(
-                self.accelerator.reduce(seq_stats[5], reduction="max").item()
+                self.accelerator.reduce(seq_stats[3], reduction="max").item()
             )
-            self._metrics["train"]["gspo/log_rho_mean"].append(
-                global_log_rho.mean().item()
-            )
-            self._metrics["train"]["gspo/log_rho_p50"].append(
-                torch.quantile(global_log_rho, 0.50).item()
-            )
-            self._metrics["train"]["gspo/log_rho_p95"].append(
-                torch.quantile(global_log_rho, 0.95).item()
-            )
-            self._metrics["train"]["gspo/log_rho_p99"].append(
-                torch.quantile(global_log_rho, 0.99).item()
-            )
+            # signed bias + spread of the per-sequence log-ratio (packing bug showed up as a
+            # negative-only shift; after the fix it should be ~symmetric around 0)
+            slr = seq_mean_lr.detach().float()
+            extra = torch.stack([slr.mean(), torch.quantile(slr.abs(), 0.5), torch.quantile(slr.abs(), 0.9)])
+            extra = self.accelerator.reduce(extra, reduction="mean")
+            self._metrics["train"]["gspo/log_rho_mean"].append(extra[0].item())
+            self._metrics["train"]["gspo/abs_log_rho_p50"].append(extra[1].item())
+            self._metrics["train"]["gspo/abs_log_rho_p90"].append(extra[2].item())
+            if self._dyn_low_frac > 0 and self._dyn_low_ema is not None:
+                self._metrics["train"]["gspo/dyn_low_bound"].append(
+                    float(torch.exp(self._dyn_low_ema))
+                )
 
             comp_mask = completion_mask[0].float()
 
@@ -304,6 +495,210 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         self._step_samples += n_forward_tokens / mean_seq_len
         self._step_forward_s += self._last_forward_time_s
         return loss
+
+    # ------------------------------------------------------------------------------------------------------------
+    # [v3_2] sub-batched prefix-share loss
+    # ------------------------------------------------------------------------------------------------------------
+    def _compute_loss_subbatched(self, model, inputs):
+        """GSPO seq_mean (+ KL k3) loss of one micro-batch row, forward+backward per token-budgeted sub-batch.
+
+        Exactness vs ``compute_loss`` (v3_1 path): every completion lives in exactly one sub-batch, so its
+        mean log-ratio / ratio / clip / seq-mean loss / seq-mean KL are computed from the same per-token values;
+        the row loss is the sum over sub-batches. Per-sequence weight = ranks / (samples in the micro-batch)
+        / gas = 1 / (samples per step), which equals v3_1's ``.mean()`` over the row whenever every row holds the
+        same number of samples (one full group per row) and stays exact when the balanced batcher gives rows
+        different counts.
+
+        DDP: all sub-batches but the last are forwarded through the UNWRAPPED module (accelerate's autocast
+        wrapper is on it, the DDP reducer is not armed) and backpropagated here; the last one goes through the
+        DDP-wrapped ``model`` and its loss is returned to the trainer, whose ``accelerator.backward`` runs the
+        (only) synchronising backward on the accumulated ``.grad``. So the per-rank number of DDP forwards and
+        collectives per micro-batch is 1, as before, whatever the number of sub-batches per rank.
+        The returned tensor = last sub-batch loss + detached sum of the others (gradient of the last only;
+        logged value of the whole row).
+        """
+        from rlforge.prefix_share import _unwrap, plan_subbatches
+
+        mask_bool = inputs["attention_mask"].bool()
+        input_ids = inputs["input_ids"][mask_bool].unsqueeze(0)
+        completion_mask = inputs["completion_mask"][mask_bool].unsqueeze(0)
+        old_log_probs = inputs["old_log_probs"][mask_bool].unsqueeze(0)
+        position_ids = inputs["position_ids"][mask_bool].unsqueeze(0)
+        advantages = inputs["advantages"][mask_bool].unsqueeze(0)
+        T = input_ids.shape[1]
+        dev = input_ids.device
+
+        plan = plan_subbatches(input_ids, position_ids, completion_mask, self._sb_tokens)
+        seq_ids = (position_ids[0] == 0).cumsum(0)[1:] - 1  # (T-1,) sample idx per shifted token
+        num_seq = int((position_ids == 0).sum())
+        cm1 = completion_mask[:, 1:]
+        old1 = old_log_probs[0, 1:]
+        adv1 = advantages[0, 1:]
+        R = self.accelerator.num_processes
+        n_mb = max(1, int(round(float(inputs["global_n_forward_tokens"][0]) / float(inputs["mean_seq_len"][0]))))
+        w = float(R) / float(n_mb)
+        gas = self.current_gradient_accumulation_steps
+
+        low_bound = 1 - self.epsilon_low
+        if self._dyn_low_frac > 0 and self._dyn_low_ema is not None:
+            low_bound = float(torch.exp(self._dyn_low_ema))
+        high_bound = 1 + self.epsilon_high
+
+        lp_full = torch.zeros(T - 1, device=dev, dtype=torch.float32)
+        ent_full = torch.zeros(T - 1, device=dev, dtype=torch.float32)
+        ref_full = torch.zeros(T - 1, device=dev, dtype=torch.float32) if self._ref_model is not None else None
+        inner = _unwrap(model)
+        fwd_s = 0.0
+        prev = None
+        last_loss = None
+        st = {"forward_tokens": 0, "padded_tokens": 0}
+        for i, sb in enumerate(plan):
+            last = i == len(plan) - 1
+            t0 = time.perf_counter()
+            ref_lp = None
+            if self._ref_model is not None:
+                with torch.no_grad():
+                    ref_lp = self._ref_model(prefix_share=dict(
+                        input_ids=input_ids, completion_mask=completion_mask, subbatch=sb))["log_probs"].float()
+            out = (model if last else inner)(prefix_share=dict(
+                input_ids=input_ids, completion_mask=completion_mask, subbatch=sb,
+                ckpt_layers=self._sb_ckpt_layers(sb["tokens"])))
+            fwd_s += time.perf_counter() - t0
+            lp = out["log_probs"].float()
+            slots = out["slots"]
+            ps = out["prefix_share_stats"]
+            st["forward_tokens"] += ps["forward_tokens"]
+            st["padded_tokens"] += ps["padded_tokens"]
+            sid = seq_ids[slots]
+            uniq, inv = torch.unique(sid, return_inverse=True)
+            z = torch.zeros(uniq.numel(), device=dev, dtype=lp.dtype)
+            n_tok = z.index_add(0, inv, torch.ones_like(lp)).clamp(min=1.0)
+            m_lr = z.index_add(0, inv, lp - old1[slots]) / n_tok
+            rho = torch.exp(m_lr)
+            rho_c = torch.clamp(rho, low_bound, high_bound)
+            a = adv1[slots]
+            ptl = -torch.min(rho[inv] * a, rho_c[inv] * a)
+            loss_sb = (z.index_add(0, inv, ptl) / n_tok).sum()
+            if ref_lp is not None:
+                d = ref_lp - lp
+                k3 = torch.exp(d) - d - 1.0
+                loss_sb = loss_sb + self._kl_beta * (z.index_add(0, inv, k3) / n_tok).sum()
+                ref_full[slots] = ref_lp
+            loss_sb = loss_sb * w / gas
+            lp_full[slots] = lp.detach()
+            ent_full[slots] = out["entropy"].detach().float()
+            if last:
+                last_loss = loss_sb
+            else:
+                self.accelerator.backward(loss_sb)
+                prev = loss_sb.detach() if prev is None else prev + loss_sb.detach()
+            del out, lp, loss_sb
+        self._sb_calls += len(plan)
+        self._last_forward_time_s = fwd_s
+        loss = last_loss if prev is None else last_loss + prev
+
+        m = self._metrics["train"]
+        unshared = T  # every sequence of the row forwarded on its own (v3_1 "unshared_tokens")
+        m["prefix_share/forward_token_frac"].append(st["forward_tokens"] / max(unshared, 1))
+        m["prefix_share/pad_frac"].append(1 - st["forward_tokens"] / max(st["padded_tokens"], 1))
+        m["prefix_share/seqs_per_group"].append(num_seq / max(len({sb["a0"] for sb in plan}), 1))
+        m["v3_2/subbatches_per_row"].append(float(len(plan)))
+        m["v3_2/row_seqs"].append(float(num_seq))
+        if self.aux_loss_enabled:
+            raise NotImplementedError("prefix-share forward does not aggregate MoE aux loss")
+
+        # ---- metrics: same quantities as the v3_1 path, from the detached full-row tensors ----
+        with torch.no_grad():
+            log_probs = lp_full[None]
+            entropy = ent_full[None]
+            log_ratio = log_probs - old_log_probs[:, 1:]
+            completion_mask = cm1
+            advantages = advantages[:, 1:]
+            valid = completion_mask[0] > 0
+            log_ratio = log_ratio * valid  # slots outside the completion are 0 in both paths
+            zeros = torch.zeros(num_seq, device=dev, dtype=log_ratio.dtype)
+            seq_lr_sum = zeros.index_add(0, seq_ids, log_ratio[0] * valid)
+            seq_n_tok = zeros.index_add(0, seq_ids, valid.to(log_ratio.dtype))
+            seq_mean_lr = seq_lr_sum / seq_n_tok.clamp(min=1.0)
+            self._audit_local_seqs += num_seq
+            if self._poslog_dir and self.state.global_step < self._poslog_steps:
+                self._write_poslog(input_ids, position_ids, inputs["completion_mask"][mask_bool].unsqueeze(0),
+                                   seq_mean_lr, seq_n_tok)
+            rho = torch.exp(seq_mean_lr)
+            if self._dyn_low_frac > 0:
+                q = torch.quantile(seq_mean_lr.detach().float(), self._dyn_low_frac)
+                self._dyn_low_ema = q if self._dyn_low_ema is None else 0.9 * self._dyn_low_ema + 0.1 * q
+            kl_seq_mean = None
+            if ref_full is not None:
+                d = (ref_full[None] - log_probs)[0]
+                k3 = torch.exp(d) - d - 1.0
+                kl_seq = torch.zeros(num_seq, device=dev, dtype=k3.dtype).index_add_(
+                    0, seq_ids, k3 * valid) / seq_n_tok.clamp(min=1.0)
+                kl_seq_mean = kl_seq.mean()
+            self._loss_metrics(log_ratio, entropy, advantages, completion_mask, seq_ids, num_seq,
+                               seq_mean_lr, rho, low_bound, kl_seq_mean)
+
+        n_forward_tokens = float(inputs["global_n_forward_tokens"][0])
+        mean_seq_len = float(inputs["mean_seq_len"][0])
+        self._step_forward_tokens += n_forward_tokens
+        self._step_trained_tokens += float(inputs["global_n_tokens"][0])
+        self._step_seq_len_weighted += mean_seq_len * n_forward_tokens
+        self._step_samples += n_forward_tokens / mean_seq_len
+        self._step_forward_s += self._last_forward_time_s
+        return loss
+
+    def _loss_metrics(self, log_ratio, entropy, advantages, completion_mask, seq_ids, num_seq, seq_mean_lr, rho,
+                      low_bound, kl_seq_mean):
+        """The v3_1 compute_loss metric block, verbatim (same collectives in the same order)."""
+        coef_1_stat = torch.exp(log_ratio)
+        valid_mask = completion_mask > 0
+        local_count = valid_mask.sum().float()
+        local_ratio_sum = coef_1_stat[valid_mask].sum()
+        local_kl_sum = ((coef_1_stat[valid_mask] - 1) - log_ratio[valid_mask]).sum()
+        local_entropy_sum = entropy[valid_mask].sum()
+        is_low_clipped = (coef_1_stat < 1 - self.epsilon_low) & (advantages < 0)
+        is_high_clipped = (coef_1_stat > 1 + self.epsilon_high) & (advantages > 0)
+        is_region_clipped = is_low_clipped | is_high_clipped
+        stats = torch.stack([local_ratio_sum, local_kl_sum, local_entropy_sum,
+                             is_low_clipped[valid_mask].float().sum(), is_high_clipped[valid_mask].float().sum(),
+                             is_region_clipped[valid_mask].float().sum(), local_count])
+        stats = self.accelerator.reduce(stats, reduction="sum")
+        (g_ratio, g_kl, g_ent, g_low, g_high, g_region, g_count) = stats.unbind(0)
+        m = self._metrics["train"]
+        m["ratio"].append((g_ratio / g_count).item())
+        m["kl"].append((g_kl / g_count).item())
+        if kl_seq_mean is not None:
+            m["kl_ref"].append(self.accelerator.gather(kl_seq_mean.detach().float().reshape(1)).mean().item())
+        m["entropy"].append((g_ent / g_count).item())
+        m["clip_ratio/low_mean"].append((g_low / g_count).item())
+        m["clip_ratio/high_mean"].append((g_high / g_count).item())
+        m["clip_ratio/region_mean"].append((g_region / g_count).item())
+        m["gspo/rho_mean"].append(rho.detach().mean().item())
+        abs_log_rho = seq_mean_lr.detach().abs()
+        seq_stats = torch.stack([(rho < low_bound).float().mean(), (rho > 1 + self.epsilon_high).float().mean(),
+                                 abs_log_rho.mean(), abs_log_rho.max()])
+        m["gspo/seq_clip_low_frac"].append(self.accelerator.reduce(seq_stats[0], reduction="mean").item())
+        m["gspo/seq_clip_high_frac"].append(self.accelerator.reduce(seq_stats[1], reduction="mean").item())
+        m["gspo/abs_log_rho_mean"].append(self.accelerator.reduce(seq_stats[2], reduction="mean").item())
+        m["gspo/abs_log_rho_max"].append(self.accelerator.reduce(seq_stats[3], reduction="max").item())
+        slr = seq_mean_lr.detach().float()
+        extra = torch.stack([slr.mean(), torch.quantile(slr.abs(), 0.5), torch.quantile(slr.abs(), 0.9)])
+        extra = self.accelerator.reduce(extra, reduction="mean")
+        m["gspo/log_rho_mean"].append(extra[0].item())
+        m["gspo/abs_log_rho_p50"].append(extra[1].item())
+        m["gspo/abs_log_rho_p90"].append(extra[2].item())
+        if self._dyn_low_frac > 0 and self._dyn_low_ema is not None:
+            m["gspo/dyn_low_bound"].append(float(torch.exp(self._dyn_low_ema)))
+        comp_mask = completion_mask[0].float()
+
+        def seg_sum(vals):
+            return torch.zeros(num_seq, device=comp_mask.device).index_add_(0, seq_ids, vals)
+
+        seq_tokens = seg_sum(comp_mask)
+        per_seq_low = seg_sum(is_low_clipped[0].float() * comp_mask) / seq_tokens
+        per_seq_high = seg_sum(is_high_clipped[0].float() * comp_mask) / seq_tokens
+        m["clip_ratio/low_min"].append(nanmin(self.accelerator.gather(nanmin(per_seq_low))).item())
+        m["clip_ratio/high_max"].append(nanmax(self.accelerator.gather(nanmax(per_seq_high))).item())
 
 
 def _apply_liger_base_kernels(model_path: str) -> None:
@@ -395,16 +790,60 @@ def main():
                     help="sequence-ratio lower clip (paper ~3e-4; token-level 0.2 was a no-op)")
     ap.add_argument("--gspo-eps-high", type=float, default=4e-4,
                     help="sequence-ratio upper clip (paper ~4e-4)")
-    ap.add_argument("--adaptive-clip-low-max", type=float, default=None)
-    ap.add_argument("--adaptive-clip-high-max", type=float, default=None)
-    ap.add_argument("--gspo-eps-max", type=float, default=0.1)
+    ap.add_argument("--gspo-dynamic-low-frac", type=float, default=0.0,
+                    help="if >0: low clip bound = exp(EMA of this quantile of per-seq "
+                         "log-ratio over micro-batches, targeting this low-side clip "
+                         "fraction instead of a fixed eps_low; high side stays fixed")
+    ap.add_argument("--kl-beta", type=float, default=0.0,
+                    help="weight of k3 KL to a frozen copy of the start policy (0 = off)")
+    ap.add_argument("--per-seq-forward", choices=["auto", "on", "off"], default="auto",
+                    help="GSPO path: forward each packed sequence separately (auto = on for models "
+                         "with linear-attention layers, whose state leaks across packed boundaries)")
+    ap.add_argument("--prefix-share", choices=["on", "off"], default="off",
+                    help="GSPO path: forward each group's prompt once and branch its completions from it "
+                         "(rlforge.prefix_share; exact, hybrid Qwen3.5/3.8 only). Also swaps TRL's planners "
+                         "for group-aware ones so a group's samples land in the same row.")
+    ap.add_argument("--token-budget", type=int, default=None,
+                    help="TRL token_budget: per-row token cap of the micro-batch planner (default: vLLM "
+                         "max_model_len). 0 = fixed count (per_device_train_batch_size samples per row; "
+                         "with --prefix-share on that is exactly one group per row)")
+    # --- v3 infra (rlforge_v3, 2026-10-03) --------------------------------------------
+    ap.add_argument("--dp-route", choices=["on", "off"], default="off",
+                    help="group-affine routing for a data-parallel vLLM server (rlforge.dp_route): every "
+                         "in-flight request of one prompt group is pinned to one DP replica through the "
+                         "X-data-parallel-rank header (least-loaded at first request). No-op at DP == 1. "
+                         "DP size from RLFORGE_DP_SIZE, else /get_world_size.")
+    ap.add_argument("--queue-maxsize", type=int, default=None,
+                    help="TRL rollout queue (scored samples waiting for the trainer) capacity; default "
+                         "TRL's 1024. Raise to >= samples/step x max_staleness so the scorer never "
+                         "backpressures (rollout/backpressure_s).")
+    _env_audit = os.environ.get("RLFORGE_DROP_AUDIT", "off").strip().lower()
+    if _env_audit not in ("on", "off", "1", "0", "true", "false", ""):
+        raise SystemExit(f"RLFORGE_DROP_AUDIT={_env_audit!r}: expected on/off")
+    ap.add_argument("--drop-audit", choices=["on", "off"],
+                    default="on" if _env_audit in ("on", "1", "true") else "off",
+                    help="rlforge.drop_audit (observe-only, rank 0): per optimizer step, length-bucketed stale-drop "
+                         "rates, generated-vs-trained completion lengths and dropped-vs-trained group rewards, as "
+                         "drop_audit/* metrics plus one line in $RLFORGE_DROP_AUDIT_PATH (default "
+                         "<out>/drop_audit.jsonl). Default from env RLFORGE_DROP_AUDIT, else off.")
+    # --- v3_2 trainer throughput (rlforge_v3_2, 2026-10-03) -----------------------------
+    ap.add_argument("--subbatch-tokens", type=int, default=0,
+                    help="v3_2: with --prefix-share on, run forward+backward per sub-batch of one prompt group with "
+                         "<= N padded tokens (shared prefix re-forwarded per sub-batch). 0 = off (v3_1 path).")
+    ap.add_argument("--sb-ckpt", choices=["all", "none", "auto"], default="all",
+                    help="v3_2: activation checkpointing inside a sub-batch: all layers / none / auto (as few as fit "
+                         "RLFORGE_SB_ACT_GB). Needs --subbatch-tokens > 0; gradient checkpointing must stay on in "
+                         "the model config (the flag only selects layers on the prefix-share path).")
+    ap.add_argument("--balance-rows", choices=["on", "off"], default="off",
+                    help="v3_2: rank load balancing of each micro-batch (rlforge.prefix_share.BalancedGroupRowBatcher): "
+                         "groups may be split over rows; needs --subbatch-tokens > 0 (loss normalised per micro-batch).")
     ap.add_argument("--no-thinking", action="store_true",
                     help="do not pass enable_thinking=True to the chat template "
                          "(Qwen-family templates only; omit for other models)")
-    ap.add_argument("--report-to", default="swanlab",
-                    help="comma-separated HF integrations: swanlab (default), tensorboard, "
-                         "wandb, mlflow... ('none' disables). The run's own JSONL/HTML "
-                         "panel (rlforge.report) is independent of this.")
+    ap.add_argument("--report-to", default="none",
+                    help="comma-separated HF integrations: tensorboard, wandb, mlflow, "
+                         "swanlab... ('none' disables). The run's own JSONL/HTML panel "
+                         "(rlforge.report) is independent of this.")
     ap.add_argument("--run-name", default=None,
                     help="run name for the tracker integrations (default: run dir name)")
     # --- performance knobs (see docs/OPTIMIZATION.md) -------------------------------
@@ -420,42 +859,43 @@ def main():
     ap.add_argument("--allow-tf32", action="store_true",
                     help="enable TF32 matmul (matters for the fp32-master recipe; "
                          "bf16 compute is unaffected)")
-    # --- LoRA / PEFT (adapter-only training; see docs/LORA.md) -----------------------
-    ap.add_argument("--lora", action="store_true",
-                    help="train a PEFT LoRA adapter instead of the full weights. The base "
-                         "model stays frozen (load it in bf16: --dtype bfloat16) and PEFT "
-                         "keeps the adapter itself in fp32, so small-lr updates still land "
-                         "-- the adapter-side equivalent of the fp32-master recipe. With a "
-                         "vLLM server started --enable-lora, each sync then ships the "
-                         "adapter (~1%% of the bytes) instead of merged full weights.")
-    ap.add_argument("--lora-r", type=int, default=16)
-    ap.add_argument("--lora-alpha", type=int, default=0,
-                    help="LoRA scaling numerator; 0 = 2 x r (the usual default)")
-    ap.add_argument("--lora-dropout", type=float, default=0.0)
-    ap.add_argument("--lora-target-modules",
-                    default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
-                    help="comma-separated module name suffixes (attention + MLP by default). "
-                         "The head/embeddings are rejected: the async trainer's chunked "
-                         "logprob path reads the head's base weight and would silently "
-                         "score a policy without the adapter.")
+    # --- non-blocking scoring (rlforge/score_loop.py; all off by default = stock TRL) -------
+    ap.add_argument("--score-concurrency", type=int, default=0,
+                    help="score up to N rollout groups concurrently (0 = stock TRL serial score "
+                         "loop; 1 = rlforge loop, serial, metric-identical to stock). A slow reward "
+                         "(LLM judge) then delays only its own group, not generation. Idle slots cost "
+                         "nothing: size it well above the number of judged groups in flight (e.g. 32).")
+    ap.add_argument("--judged-max-staleness", type=int, default=None,
+                    help="cap on the staleness of samples from groups the reward sent to the judge "
+                         "(reward sets rlforge_info['judged']). Judged samples are allowed exactly the "
+                         "weight syncs their own scoring took (rlforge/judge_versions), up to this cap. "
+                         "Default: --max-staleness + 2 when --score-concurrency > 1, else off; "
+                         "-1 = off; otherwise must be > --max-staleness.")
+    ap.add_argument("--reward-early-hooks", action="store_true",
+                    help="EXPERIMENTAL, not recommended: call the reward's rlforge_on_rollout hook as each "
+                         "rollout finishes (aiq_think_reward_v3: submit judge calls before the group is "
+                         "complete). Under judge saturation it favours short rollouts.")
+    ap.add_argument("--score-task-max-s", type=float, default=None,
+                    help="fail the rollout worker if one group's reward scoring takes longer than this "
+                         "(hung reward/judge; TRL's check_health then stops the run). Default: env "
+                         "RLFORGE_SCORE_TASK_MAX_S, else max(600, 3 x AIQ_HALLUC_TIMEOUT_S).")
     args = ap.parse_args()
 
-    if (args.adaptive_clip_low_max is None) != (args.adaptive_clip_high_max is None):
-        ap.error("both adaptive clip-fraction caps must be set together")
-    if args.adaptive_clip_low_max is not None and not args.gspo:
-        ap.error("adaptive clip-fraction caps require --gspo")
-    lora_targets = [t.strip() for t in args.lora_target_modules.split(",") if t.strip()]
-    if args.lora:
-        banned = {"lm_head", "wte", "embed_tokens", "output", "score"}
-        hit = sorted(set(lora_targets) & banned)
-        if hit:
-            ap.error(f"--lora-target-modules must not contain {hit}: the chunked logprob path "
-                     "reads the head's base weights, so the trainer would score a policy the "
-                     "server does not serve")
-        if not lora_targets:
-            ap.error("--lora-target-modules is empty")
-    if args.gspo_eps_max < max(args.gspo_eps_low, args.gspo_eps_high):
-        ap.error("--gspo-eps-max must be at least both base epsilon values")
+    if (args.score_concurrency > 0 or args.reward_early_hooks
+            or (args.judged_max_staleness is not None and args.judged_max_staleness >= 0)):
+        from rlforge.score_loop import install as _install_score_loop
+        if args.judged_max_staleness is None:
+            _judged = "auto"
+        else:
+            _judged = args.judged_max_staleness if args.judged_max_staleness >= 0 else None
+        _install_score_loop(
+            score_concurrency=args.score_concurrency,
+            judged_max_staleness=_judged,
+            early_hooks=args.reward_early_hooks,
+            max_staleness=args.max_staleness,
+            score_task_max_s=args.score_task_max_s,
+        )
+
     if args.allow_tf32:
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
@@ -464,6 +904,10 @@ def main():
         _apply_liger_base_kernels(args.model)
 
     _patch_attention_for_old_gpus()
+    if os.environ.get("RLFORGE_FUSED_OPS"):
+        # [v3_2] fused conv / norm / SwiGLU for Qwen3.5 (rlforge.fused_ops); trainer side only
+        from rlforge.fused_ops import install as _install_fused
+        _install_fused()
 
     rows = [json.loads(line) for line in open(args.train)]
     ds = Dataset.from_list(rows)
@@ -472,12 +916,6 @@ def main():
     gas = max(1, args.completions_per_step // pdb)
 
     report_to = [] if args.report_to in ("none", "") else args.report_to.split(",")
-    if "swanlab" in report_to:
-        output_dir = Path(args.out).resolve()
-        project_root = output_dir.parent.parent if output_dir.parent.name == "runs" else output_dir
-        os.environ.setdefault("SWANLAB_MODE", "local")
-        os.environ.setdefault("SWANLAB_LOGDIR", str(project_root / "swanlog"))
-        os.environ.setdefault("SWANLAB_PROJ_NAME", "AIQ")
 
     cfg_kwargs = dict(
         output_dir=args.out,
@@ -514,6 +952,10 @@ def main():
     )
     if args.dtype == "bfloat16":
         cfg_kwargs["dtype"] = "bfloat16"
+    if args.token_budget is not None:
+        cfg_kwargs["token_budget"] = args.token_budget
+    if args.queue_maxsize is not None:
+        cfg_kwargs["queue_maxsize"] = args.queue_maxsize
     if args.optim:
         cfg_kwargs["optim"] = args.optim
     if args.max_steps:
@@ -525,41 +967,62 @@ def main():
     # silently-ignored option is visible in the log.
     import dataclasses
     known = {f.name for f in dataclasses.fields(AsyncGRPOConfig)}
-    if "logging_dir" not in known:
-        cfg_kwargs.pop("logging_dir", None)
-        if "tensorboard" in report_to:
-            report_to = [backend for backend in report_to if backend != "tensorboard"]
-            cfg_kwargs["report_to"] = report_to
-            print("[rlforge] this TRL version's config has no logging_dir; "
-                  "TensorBoard reporting disabled, other trackers remain enabled")
+    if report_to and "logging_dir" not in known:
+        # The TB callback reads args.logging_dir; on TRL versions whose config
+        # lacks the field the callback crashes. Disable trackers instead --
+        # the rlforge.report HTML panel is unaffected.
+        print("[rlforge] this TRL version's config has no logging_dir; "
+              "report_to disabled (use the rlforge.report panel instead)")
+        cfg_kwargs["report_to"] = []
     dropped = sorted(set(cfg_kwargs) - known)
     if dropped:
         print(f"[rlforge] config keys not supported by this TRL version, dropped: {dropped}")
     cfg_kwargs = {k: v for k, v in cfg_kwargs.items() if k in known}
     cfg = AsyncGRPOConfig(**cfg_kwargs)
 
+    if args.prefix_share == "on":
+        if not args.gspo:
+            raise SystemExit("--prefix-share requires --gspo")
+        # The planners are looked up by name when the dataloader is built; the group-aware ones keep
+        # TRL's contracts (same micro-batch sample count / same forwarded-token budget per row).
+        import trl.experimental.async_grpo.async_grpo_trainer as agt
+        from rlforge.prefix_share import GroupRowBatcher, GroupTokenBudgetBatcher
+        agt.FixedCountBatcher = GroupRowBatcher
+        agt.TokenBudgetBatcher = GroupTokenBudgetBatcher
+        if args.balance_rows == "on":
+            if args.subbatch_tokens <= 0:
+                raise SystemExit("--balance-rows on requires --subbatch-tokens > 0")
+            if args.token_budget not in (0, None):
+                raise SystemExit("--balance-rows on requires --token-budget 0")
+            from rlforge.prefix_share import BalancedGroupRowBatcher
+            agt.FixedCountBatcher = BalancedGroupRowBatcher
+    elif args.subbatch_tokens or args.balance_rows == "on":
+        raise SystemExit("--subbatch-tokens / --balance-rows require --prefix-share on")
+
+    if args.dp_route == "on":
+        # Must precede trainer construction: AsyncRolloutWorker._loop_cls is pickled by reference
+        # into the spawned rollout child, which then imports rlforge.dp_route itself.
+        from rlforge import dp_route
+        dp_route.install()
+    print(f"[rlforge] v3 infra: prefix_share={args.prefix_share} token_budget={args.token_budget} "
+          f"dp_route={args.dp_route} (RLFORGE_DP_SIZE={os.environ.get('RLFORGE_DP_SIZE', 'auto')}) "
+          f"queue_maxsize={cfg.queue_maxsize} max_inflight={cfg.max_inflight_tasks} "
+          f"pdb={cfg.per_device_train_batch_size} gas={cfg.gradient_accumulation_steps} "
+          f"[v3_2] subbatch_tokens={args.subbatch_tokens} sb_ckpt={args.sb_ckpt} balance_rows={args.balance_rows}",
+          flush=True)
+
     trainer_cls = GSPOAsyncGRPOTrainer if args.gspo else AsyncGRPOTrainer
+    if not args.gspo:
+        print("[rlforge] WARNING: non-GSPO path has no per-seq forward; hybrid models pack rows", flush=True)
     trainer_kwargs = {}
     if args.gspo:
         trainer_kwargs["gspo_norm"] = args.gspo_norm
-        trainer_kwargs["adaptive_clip_low_max"] = args.adaptive_clip_low_max
-        trainer_kwargs["adaptive_clip_high_max"] = args.adaptive_clip_high_max
-        trainer_kwargs["gspo_eps_max"] = args.gspo_eps_max
-    if args.lora:
-        from peft import LoraConfig
-
-        lora_alpha = args.lora_alpha or 2 * args.lora_r
-        trainer_kwargs["peft_config"] = LoraConfig(
-            r=args.lora_r,
-            lora_alpha=lora_alpha,
-            lora_dropout=args.lora_dropout,
-            target_modules=lora_targets,
-            bias="none",
-            task_type="CAUSAL_LM",
-        )
-        print(f"[rlforge] LoRA: r={args.lora_r} alpha={lora_alpha} dropout={args.lora_dropout} "
-              f"targets={lora_targets} (base dtype={args.dtype}; PEFT keeps the adapter in "
-              f"fp32 when the base is bf16)")
+        trainer_kwargs["gspo_dynamic_low_frac"] = args.gspo_dynamic_low_frac
+        trainer_kwargs["per_seq_forward"] = args.per_seq_forward
+        trainer_kwargs["kl_beta"] = args.kl_beta
+        trainer_kwargs["prefix_share"] = args.prefix_share == "on"
+        trainer_kwargs["subbatch_tokens"] = args.subbatch_tokens
+        trainer_kwargs["sb_ckpt"] = args.sb_ckpt
     trainer = trainer_cls(
         model=args.model,
         reward_funcs=partial(load_reward_fn(args.reward), cap=args.max_completion),
@@ -567,14 +1030,31 @@ def main():
         train_dataset=ds,
         **trainer_kwargs,
     )
-    # Must happen before the first packed forward. On a hybrid GatedDeltaNet backbone this is
-    # what stops a packed row's segments from bleeding into each other (see
-    # rlforge.hybrid_packing); on any other architecture it is a cheap no-op.
-    install_packing(getattr(trainer, "model", None))
+    if args.drop_audit == "on":
+        # Wraps get_train_dataloader (rank 0 only builds the queue dataset) and adds a step-end callback after
+        # TRL's own; never touches which samples are trained or in what order (rlforge/drop_audit.py).
+        # Any failure here leaves the trainer as it was (the audit is optional, training is not).
+        audit_path = os.environ.get("RLFORGE_DROP_AUDIT_PATH") or os.path.join(args.out, "drop_audit.jsonl")
+        try:
+            from rlforge import drop_audit
+            _audit = drop_audit.install(trainer, path=audit_path, max_completion=args.max_completion,
+                                        num_generations=args.num_generations)
+        except Exception as e:  # noqa: BLE001
+            _audit = None
+            print(f"[rlforge] drop_audit import/install failed: {type(e).__name__}: {e}", flush=True)
+        if _audit is not None:
+            print(f"[rlforge] drop_audit=on -> {audit_path} (observe-only, rank 0; drop_audit/* metrics; "
+                  f"buckets {_audit.names})", flush=True)
+        else:
+            print("[rlforge] WARNING: --drop-audit on but the audit is NOT installed; training continues "
+                  "without it", flush=True)
     trainer.train()
     trainer.save_model(args.out + "/final")
-    with open(args.out + "/log_history.json", "w") as f:
-        json.dump(trainer.state.log_history, f, indent=1)
+    # Rank 0 only: every rank used to write this file (a race), and only rank 0's log_history carries the
+    # rank-0 metrics (TRL's reward/queue metrics, drop_audit/*).
+    if trainer.accelerator.is_main_process:
+        with open(args.out + "/log_history.json", "w") as f:
+            json.dump(trainer.state.log_history, f, indent=1)
 
 
 if __name__ == "__main__":

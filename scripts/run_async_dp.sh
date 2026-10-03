@@ -18,7 +18,6 @@ SUFFIX="${2:-}"
 ROOT="${ROOT:?set ROOT}"
 VENV="${VENV:?set VENV}"
 MODEL="${MODEL:?set MODEL (also export RLFORGE_BASE_MODEL for checkpoint evals)}"
-REWARD="${REWARD:-rlforge.rewards.mcq:mcq_reward}"
 PORT="${PORT:-8000}"
 
 source "$VENV/bin/activate"
@@ -35,15 +34,6 @@ export VLLM_ALLREDUCE_USE_FLASHINFER="${VLLM_ALLREDUCE_USE_FLASHINFER:-0}"
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
 export TRL_EXPERIMENTAL_SILENCE="${TRL_EXPERIMENTAL_SILENCE:-1}"
-REPORT_TO="${REPORT_TO:-swanlab}"
-case ",$REPORT_TO," in
-  *,swanlab,*)
-    export SWANLAB_MODE="${SWANLAB_MODE:-local}"
-    export SWANLAB_LOGDIR="${SWANLAB_LOGDIR:-$ROOT/swanlog}"
-    export SWANLAB_PROJ_NAME="${SWANLAB_PROJ_NAME:-AIQ}"
-    mkdir -p "$SWANLAB_LOGDIR"
-    ;;
-esac
 mkdir -p "$TMPDIR"
 
 DTYPE="${DTYPE:-none}"
@@ -59,26 +49,10 @@ GRAD_CKPT="${GRAD_CKPT:-1}"    # 0 = disable grad ckpt (~30%% trainer, needs VRA
 OPTIM="${OPTIM:-}"             # e.g. adamw_torch_fused
 TF32="${TF32:-0}"              # 1 = allow tf32 (fp32-master recipe)
 DYNAMO="${DYNAMO:-no}"         # inductor = torch.compile via accelerate (test first)
-NO_THINKING="${NO_THINKING:-0}"
-# FP8 KV is validated on H200; set KV_DTYPE=auto on unsupported hardware or to compare.
-KV_DTYPE="${KV_DTYPE:-fp8}"
-ROLLOUT_QUANTIZATION="${ROLLOUT_QUANTIZATION:-none}" # none or fp8; vLLM weight quantization
-# LoRA (PEFT adapter training). LORA=1 freezes the base model, trains an fp32 adapter
-# (PEFT keeps adapters fp32 when the base is bf16) and -- with the server-side flags added
-# below -- syncs only the adapter each step (~1% of the bytes). The base can still be served
-# under ROLLOUT_QUANTIZATION=fp8; measure the resulting train/rollout logprob gap.
-LORA="${LORA:-0}"
-LORA_R="${LORA_R:-16}"
-LORA_ALPHA="${LORA_ALPHA:-0}"   # 0 = 2 x r
-LORA_DROPOUT="${LORA_DROPOUT:-0.0}"
-LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj,in_proj_qkv,in_proj_z,in_proj_a,in_proj_b,out_proj}"
 GSPO="${GSPO:-1}"
 GSPO_NORM="${GSPO_NORM:-seq_mean}"
 GSPO_EPS_LOW="${GSPO_EPS_LOW:-3e-4}"
 GSPO_EPS_HIGH="${GSPO_EPS_HIGH:-4e-4}"
-ADAPT_CLIP_LOW_MAX_FRAC="${ADAPT_CLIP_LOW_MAX_FRAC:-}"
-ADAPT_CLIP_HIGH_MAX_FRAC="${ADAPT_CLIP_HIGH_MAX_FRAC:-}"
-GSPO_EPS_MAX="${GSPO_EPS_MAX:-0.1}"
 CPS="${CPS:-256}"
 NGEN="${NGEN:-16}"
 STALE="${STALE:-3}"
@@ -105,19 +79,12 @@ EXTRA_ARGS=""
 [ "$DTYPE" = "bfloat16" ] && EXTRA_ARGS="$EXTRA_ARGS --dtype bfloat16"
 if [ "$GSPO" = "1" ]; then
   EXTRA_ARGS="$EXTRA_ARGS --gspo --gspo-norm $GSPO_NORM --gspo-eps-low $GSPO_EPS_LOW --gspo-eps-high $GSPO_EPS_HIGH"
-  if [ -n "$ADAPT_CLIP_LOW_MAX_FRAC" ] || [ -n "$ADAPT_CLIP_HIGH_MAX_FRAC" ]; then
-    if [ -z "$ADAPT_CLIP_LOW_MAX_FRAC" ] || [ -z "$ADAPT_CLIP_HIGH_MAX_FRAC" ]; then
-      echo "set both adaptive clip fraction caps" >&2; exit 2
-    fi
-    EXTRA_ARGS="$EXTRA_ARGS --adaptive-clip-low-max $ADAPT_CLIP_LOW_MAX_FRAC --adaptive-clip-high-max $ADAPT_CLIP_HIGH_MAX_FRAC --gspo-eps-max $GSPO_EPS_MAX"
-  fi
 fi
 [ "$MAX_STEPS" != "0" ] && EXTRA_ARGS="$EXTRA_ARGS --max-steps $MAX_STEPS"
 [ "$LIGER" = "1" ] && EXTRA_ARGS="$EXTRA_ARGS --use-liger"
 [ "$GRAD_CKPT" = "0" ] && EXTRA_ARGS="$EXTRA_ARGS --no-grad-ckpt"
 [ -n "$OPTIM" ] && EXTRA_ARGS="$EXTRA_ARGS --optim $OPTIM"
 [ "$TF32" = "1" ] && EXTRA_ARGS="$EXTRA_ARGS --allow-tf32"
-[ "$NO_THINKING" = "1" ] && EXTRA_ARGS="$EXTRA_ARGS --no-thinking"
 # Must exceed the worst-case single request: max_completion tokens at the per-sequence rate
 # implied by MAX_SEQS. At TRL's 120 s default an 8k completion cannot finish when the server
 # runs ~1000 sequences, so every request times out and the trainer never sees a first batch.
@@ -133,7 +100,7 @@ mkdir -p "$OUT"
 echo "[dp] mode=$MODE data=$DATA out=$OUT gspo=$GSPO norm=${GSPO_NORM:-} eps=${GSPO_EPS_LOW:-}/${GSPO_EPS_HIGH:-} cps=$CPS ngen=$NGEN stale=$STALE inflight=$INFLIGHT lr=$LR"
 echo "[dp] rollout GPUs=$SERVER_GPUS TP=$TP | trainer GPUs=$TRAINER_GPUS ranks=$NUM_TRAINER | max_completion=$MAX_COMPLETION"
 echo "[dp] epochs=$EPOCHS max_steps=${MAX_STEPS:-0} save_steps=${SAVE:-50} request_timeout=$REQUEST_TIMEOUT task_log=$RLFORGE_TASK_LOG"
-echo "[dp] perf: liger=$LIGER grad_ckpt=$GRAD_CKPT optim=${OPTIM:-default} tf32=$TF32 dynamo=$DYNAMO fi_sampler=$VLLM_USE_FLASHINFER_SAMPLER kv_dtype=${KV_DTYPE:-auto} rollout_quantization=$ROLLOUT_QUANTIZATION"
+echo "[dp] perf: liger=$LIGER grad_ckpt=$GRAD_CKPT optim=${OPTIM:-default} tf32=$TF32 dynamo=$DYNAMO fi_sampler=$VLLM_USE_FLASHINFER_SAMPLER kv_dtype=${KV_DTYPE:-auto}"
 
 # Throughput knobs. On this workload vLLM's stock ceilings throttle the rollout:
 # ~900 sequences run concurrently, but CUDA graphs are only captured up to
@@ -146,57 +113,7 @@ VLLM_EXTRA="${VLLM_EXTRA:-}"
 [ -n "${MAX_BATCHED:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-num-batched-tokens $MAX_BATCHED"
 [ -n "${MAX_CG:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-cudagraph-capture-size $MAX_CG"
 [ "${ASYNC_SCHED:-0}" = "1" ] && VLLM_EXTRA="$VLLM_EXTRA --async-scheduling"
-case "$ROLLOUT_QUANTIZATION" in
-  none) ;;
-  fp8) VLLM_EXTRA="$VLLM_EXTRA --quantization fp8" ;;
-  *) echo "ROLLOUT_QUANTIZATION must be none or fp8 (got $ROLLOUT_QUANTIZATION)" >&2; exit 2 ;;
-esac
 [ -n "${KV_DTYPE:-}" ] && [ "$KV_DTYPE" != "auto" ] && VLLM_EXTRA="$VLLM_EXTRA --kv-cache-dtype $KV_DTYPE"
-if [ "$LORA" = "1" ]; then
-  # Adapter-only sync: the trainer saves each policy version under $OUT/.vllm_lora and the
-  # server loads it over the HTTP API, so the server must allow runtime adapter updates and
-  # hold every version an in-flight request can still name (max_staleness + 2, per TRL).
-  # --max-lora-rank must be one of vLLM's stacked-buffer ranks and >= the adapter's rank.
-  export VLLM_ALLOW_RUNTIME_LORA_UPDATING=1
-  LORA_RANK="$LORA_R"
-  for cand in 1 8 16 32 64 128 256 320 512; do
-    if [ "$cand" -ge "$LORA_R" ]; then LORA_RANK="$cand"; break; fi
-  done
-  [ "$LORA_RANK" -ge "$LORA_R" ] || { echo "LORA_R $LORA_R exceeds vLLM's max rank 512" >&2; exit 2; }
-  LORA_SLOTS=$((STALE + 2))
-  VLLM_EXTRA="$VLLM_EXTRA --enable-lora --max-lora-rank $LORA_RANK --max-loras $LORA_SLOTS"
-  EXTRA_ARGS="$EXTRA_ARGS --lora --lora-r $LORA_R --lora-dropout $LORA_DROPOUT --lora-target-modules $LORA_TARGET_MODULES"
-  [ "$LORA_ALPHA" != "0" ] && EXTRA_ARGS="$EXTRA_ARGS --lora-alpha $LORA_ALPHA"
-  echo "[dp] lora: r=$LORA_R alpha=${LORA_ALPHA:-auto} rank_cap=$LORA_RANK slots=$LORA_SLOTS targets=$LORA_TARGET_MODULES"
-  # Coverage preflight: a target list that is correct for a pure transformer (q/k/v/o + MLP)
-  # matches NOTHING on the GatedDeltaNet token mixers of a 3:1 hybrid Qwen3.5/3.8 model, so
-  # the run would train a partial adapter while reporting a plausible-looking size.
-  "$VENV/bin/python" - "$MODEL" "$LORA_TARGET_MODULES" <<'PY' || exit 2
-import sys
-
-from transformers import AutoConfig
-
-model, targets = sys.argv[1], {t.strip() for t in sys.argv[2].split(",") if t.strip()}
-cfg = AutoConfig.from_pretrained(model)
-tc = cfg.get_text_config() if hasattr(cfg, "get_text_config") else cfg
-kinds = set(getattr(tc, "layer_types", None) or [])
-gaps = []
-if "linear_attention" in kinds and "in_proj_qkv" not in targets:
-    gaps.append("linear_attention (GatedDeltaNet) token mixers are uncovered: add "
-                "in_proj_qkv,in_proj_z,in_proj_a,in_proj_b,out_proj")
-if "full_attention" in kinds and not {"q_proj", "k_proj", "v_proj", "o_proj"} <= targets:
-    gaps.append("full_attention projections are uncovered: add q_proj,k_proj,v_proj,o_proj")
-if "linear_attention" in kinds and "in_proj_qkv" in targets and "out_proj" not in targets:
-    gaps.append("in_proj_* is covered but out_proj (the DeltaNet output projection) is not")
-if gaps:
-    print("[dp] LORA COVERAGE ERROR:")
-    for g in gaps:
-        print("[dp]   - " + g)
-    sys.exit(1)
-
-print(f"[dp] lora coverage OK for layer kinds {sorted(kinds) or ['attention-only']}")
-PY
-fi
 echo "[dp] vllm extra:${VLLM_EXTRA:- (stock)}"
 
 # ---- run manifest + code snapshot (contract A/H): written BEFORE anything starts, so a
@@ -245,23 +162,12 @@ manifest = {
     "hyperparams": {
         "gspo": "$GSPO" == "1", "gspo_norm": "${GSPO_NORM:-}",
         "gspo_eps_low": "${GSPO_EPS_LOW:-}", "gspo_eps_high": "${GSPO_EPS_HIGH:-}",
-        "adaptive_clip_low_max_frac": "${ADAPT_CLIP_LOW_MAX_FRAC:-}",
-        "adaptive_clip_high_max_frac": "${ADAPT_CLIP_HIGH_MAX_FRAC:-}",
-        "gspo_eps_max": "${GSPO_EPS_MAX:-0.1}",
         "cps": int("$CPS"), "ngen": int("$NGEN"), "stale": int("$STALE"),
         "inflight": int("$INFLIGHT"), "lr": "$LR", "epochs": "$EPOCHS",
         "max_steps": "${MAX_STEPS:-0}", "max_completion": int("$MAX_COMPLETION"),
         "request_timeout": "$REQUEST_TIMEOUT", "save_steps": "${SAVE:-50}",
         "save_total_limit": 4, "max_seqs": "${MAX_SEQS:-stock}",
         "max_batched": "${MAX_BATCHED:-stock}", "max_cg": "${MAX_CG:-stock}",
-        "trainer_weight_dtype": "$DTYPE", "trainer_mixed_precision": "$MIXED_PRECISION",
-        "no_thinking": "$NO_THINKING" == "1",
-        "tracker_backend": "$REPORT_TO", "swanlab_mode": "${SWANLAB_MODE:-disabled}",
-        "rollout_dtype": "bfloat16", "rollout_quantization": "$ROLLOUT_QUANTIZATION",
-        "kv_cache_dtype": "${KV_DTYPE:-auto}",
-        "lora": "$LORA" == "1", "lora_r": int("$LORA_R"),
-        "lora_alpha": "$LORA_ALPHA", "lora_dropout": "$LORA_DROPOUT",
-        "lora_target_modules": "$LORA_TARGET_MODULES",
     },
     "reward": {"correct": 1.0, "wrong": 0.0, "unparsed": -0.5, "truncated": -2.0,
                "ranking": "exact=+1 else concordant/5-1", "cap": int("$MAX_COMPLETION")},
@@ -319,7 +225,7 @@ if ! curl -sf "localhost:$PORT/health" > /dev/null; then
 fi
 
 set +e
-# REPORT_TO defaults to local SwanLab; override with tensorboard/wandb/mlflow/none as needed.
+# REPORT_TO: HF tracker integrations (tensorboard / wandb / mlflow / swanlab...).
 # ACCELERATE_CONFIG: when set, replaces the inline accelerate flags entirely (e.g.
 # an FSDP config from examples/accelerate/).
 if [ -n "${ACCELERATE_CONFIG:-}" ]; then
@@ -330,7 +236,6 @@ fi
 CUDA_VISIBLE_DEVICES=$TRAINER_GPUS "${ACC_LAUNCH[@]}" \
     -m rlforge.trainer \
   --model "$MODEL" \
-  --server-url "http://localhost:$PORT" \
   --train "$DATA" \
   --out "$OUT" \
   --epochs "$EPOCHS" \
@@ -341,7 +246,7 @@ CUDA_VISIBLE_DEVICES=$TRAINER_GPUS "${ACC_LAUNCH[@]}" \
   --save-steps "$SAVE" \
   --max-staleness "$STALE" \
   --max-inflight-tasks "$INFLIGHT" \
-  --report-to "${REPORT_TO:-swanlab}" \
+  --report-to "${REPORT_TO:-none}" \
   $EXTRA_ARGS \
   2>&1 | tee "logs/trainer_dp${SUFFIX}.log"
 TRAINER_RC=${PIPESTATUS[0]}
