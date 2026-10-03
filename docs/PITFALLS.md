@@ -12,3 +12,8 @@
    to `keep_best/` the moment a new best eval lands.
 6. **Missing tokenizer files in checkpoints** → the evaluator builds a shim from
    the base model (never weights).
+7. **The 2026-10-03 infra failure modes**: one API server for many DP replicas, uvicorn keep-alive
+   disconnects, ZMQ ipc path length, buffering that drops long groups as stale, a dead remote
+   rank that leaves `/health` at 200, judge rate-limit buckets, and pattern-based `pkill` taking
+   down someone else's run. See [`INFRA_HANDOFF.md` §5](INFRA_HANDOFF.md#5-踩过的坑与经验)
+   (symptom → root cause → fix → evidence).
