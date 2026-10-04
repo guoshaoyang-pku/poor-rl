@@ -1,269 +1,69 @@
-# rlforge
+# 合成大西瓜 · Suika RL
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
-![Scope](https://img.shields.io/badge/scope-single--node%20%C2%B7%20small%20models-green)
+用强化学习学会持续合成水果。**55.9M 参数的 Set Transformer + Dueling DQN** 从当前局面与下一个水果预测 128 个落点的 Q 值，部署时直接贪心落子。
 
-Async **GSPO/GRPO** RL post-training for small generative models (LLM/VLM), built on
-[TRL](https://github.com/huggingface/trl)'s experimental `AsyncGRPOTrainer` + a
-vLLM rollout server — plus the guardrails you need to run experiments unattended
-on a single GPU node, fully offline.
+**[观看纪录回放与训练曲线](https://guoshaoyang-pku.github.io/blogs/suika_showcase.html)** · [打开逐帧回放](https://guoshaoyang-pku.github.io/blogs/suika/web/index.html) · [训练代码](suika/rl) · [物理引擎](suika/engine)
 
-**Niche: small models, one machine, well optimized.** Developed and validated on an
-8xH200 node training a 0.8B model for 1500 steps: held-out accuracy 0.11 (base) →
-0.81, with every failure mode listed below hit (and fixed) in production first.
+## 纪录回放
 
-## Contents
+| 对局 | 棋盘 · seed | 分数 | 落子数 | 结束状态 |
+|---|---|---:|---:|---|
+| [完整纪录局](https://guoshaoyang-pku.github.io/blogs/suika/web/index.html?game=w6s_var550_s1_31447) | 550×720 · 1 | **31,447** | 2,683 | 自然结束 |
+| [评测上限时仍存活](https://guoshaoyang-pku.github.io/blogs/suika/web/index.html?game=w6s_var550_s2_34976_capped) | 550×720 · 2 | **≥34,976** | 3,000 | 被评测上限截断，分数为下界 |
+| [448 宽板纪录局](https://guoshaoyang-pku.github.io/blogs/suika/web/index.html?game=w6c_h720_s3_26406) | 448×720 · 3 | **26,406** | 2,336 | 自然结束 |
+| [完整 Q128 回放](https://guoshaoyang-pku.github.io/blogs/suika/web/index.html?game=w6s_var550_s22_high&tab=pv) | 550×720 · 22 | **22,661** | 2,013 | 自然结束，保存每步 128 列 Q 值 |
 
-- [Why not just TRL / verl?](#why-not-just-trl--verl)
-- [Install](#install)
-- [Quickstart](#quickstart-single-node-8-gpus)
-- [Custom rewards](#custom-rewards)
-- [Agentic RL harness](#agentic-rl-harness-preview)
-- [The GSPO contract](#the-gspo-contract-what-we-got-wrong-before-you)
-- [Precision recipes](#precision-recipes)
-- [The RL panel](#the-rl-panel)
-- [Pitfalls this framework guards against](#pitfalls-this-framework-guards-against)
-- [Repo layout](#repo-layout)
-- [Docs](#docs)
+[![34,976 分纪录局的真实回放局面](suika/showcase/figs/suika_record.png)](https://guoshaoyang-pku.github.io/blogs/suika/web/index.html?game=w6s_var550_s2_34976_capped&frame=99999999)
 
-## Why not just TRL / verl?
+回放支持播放、逐帧、倍速、拖动时间轴和跳到任意落子，显示实际水果位置、落点、分数与合成事件。新纪录从已记录动作重建并校验比分，未保存的 Q 值留空；22,661 分对局可查看完整 Q128。
 
-| | rlforge | TRL stock | verl |
-|---|---|---|---|
-| GSPO sequence-level IS | yes, with `seq_mean` normalization | sync only, token-mean normalization | yes (set `loss_agg_mode=seq-mean-token-mean`) |
-| Async rollout (staleness) | yes, static GPU split (e.g. 4+4) | yes (experimental) | colocate or separate_async |
-| Reward truncation signal | length-aware (`-2` on cap hit) | n/a | reward managers don't pass lengths by default |
-| Unattended runs | watchdog (5 stop rules) + in-loop held-out eval + keep-best | no | no |
-| Run tracking | SwanLab (local default) + RL-specific HTML report | HF integrations | configurable logger backends |
-| Scale | single node, full-DP, ~0.5–3B (FSDP config for beyond) | single/multi node | multi-node, FSDP, 8B–70B+ |
+精彩片段：[一次连锁 +310 分](https://guoshaoyang-pku.github.io/blogs/suika/web/index.html?game=w6s_var550_s1_31447&frame=41499) · [双西瓜消除](https://guoshaoyang-pku.github.io/blogs/suika/web/index.html?game=w6s_var550_s1_31447&frame=41525) · [窄板连锁 +294 分](https://guoshaoyang-pku.github.io/blogs/suika/web/index.html?game=w6c_h720_s3_26406&frame=35757)。
 
-Scope: RL post-training of generative models at single-node scale. For classic
-control (DQN etc.) use Stable-Baselines3/CleanRL; for ≥8B or multi-node use verl.
+精选单局用于展示行为。550 与 448 是不同棋盘宽度；720 指死亡线到地板的距离。Wave6 使用 **pymunk settle 步进、双西瓜消除并加 66 分**，观察包含当前与下一个水果，未使用未来随机种子或搜索。
 
-## Install
+## 训练曲线
 
-```bash
-pip install -e ".[panel]"
-```
+![Set Transformer 与 MLP 在两种棋盘上的真实训练评测曲线](suika/showcase/training/training_curves.png)
 
-## Quickstart (single node, 8 GPUs)
+横轴为日志报告的累计环境步数；实线为初始训练与接续，虚线为后续训练。保留全部评测点，三角标出包含达到评测步数上限的对局；这些分数为下界。模型规模和配方不同，图展示各自实测表现。
 
-```bash
-export ROOT=/path/to/project   # will hold data/ logs/ runs/ evals/
-export VENV=/path/to/venv
-export MODEL=/path/to/base/model
-export RLFORGE_BASE_MODEL=$MODEL
+| Set Transformer 最佳未截断开发评测 | 局数 | 平均分 | 中位数 |
+|---|---:|---:|---:|
+| 448×720 · w6s_h720 · grad 12712 | 12 | **6,898.75** | 4,973.5 |
+| 550×720 · w6s_var · grad 14893 | 4 | **14,422.25** | 13,566.5 |
 
-# train.jsonl rows: {"prompt": [...chat...] or "...", "answer": "C" | "A<B<C<D<E", "source": "..."}
-ROOT=$ROOT VENV=$VENV MODEL=$MODEL \
-GSPO=1 GSPO_EPS_LOW=0.007 GSPO_EPS_HIGH=0.008 MAX_STEPS=1500 \
-REPORT_TO=swanlab \
-bash scripts/run_async_dp.sh full _run1 &
+评测使用训练期间反复检查的固定开发种子：448×720 为 seed 0–11；550×720 为 seed 0–3。表中按均值选择最佳 checkpoint。后续训练的最后一次均值分别为 4,348.75 与 8,033.0；完整走势见图。
 
-# watchdog: in-loop held-out eval + keep-best + auto-stop
-python -m rlforge.watchdog --run $ROOT/runs/async_dp_run1 \
-    --trainer-log $ROOT/logs/trainer_dp_run1.log --launcher-pid $! \
-    --eval-gpu 7 --eval-data data/eval.jsonl &
+![训练 loss](suika/showcase/training/training_loss.png)
 
-# panel 1 (general): SwanLab comparison dashboard
-ROOT=$ROOT VENV=$VENV bash scripts/panel.sh  # http://127.0.0.1:5092
+Loss 按每 1,000 万环境步取记录中位数，用于检查优化过程。游戏表现由评测曲线体现。
 
-# panel 2 (RL-specific): auto HTML report every 10 min
-python -m rlforge.report --run $ROOT/runs/async_dp_run1 \
-    --trainer-log $ROOT/logs/trainer_dp_run1.log \
-    --eval-history $ROOT/evals/async_dp_run1/history.jsonl \
-    --out $ROOT/runs/async_dp_run1/report
-```
+[回放证据与校验值](suika/showcase/traces/provenance.json) · [精选原始动作](suika/showcase/traces/selected_eval_actions.jsonl)
 
-## Custom rewards
+[评测 CSV](suika/showcase/training/evaluation_curves.csv) · [Loss CSV](suika/showcase/training/loss_curves.csv) · [来源、评测协议与 SHA256](suika/showcase/training/provenance.json) · [曲线 SVG](suika/showcase/training/training_curves.svg)
 
-Any `module:function` with the TRL signature works:
+## 代码与数据
+
+| 路径 | 内容 |
+|---|---|
+| [suika/rl](suika/rl) | DQN learner、并行 actors、推理服务、固定种子 evaluator、配置与诊断脚本 |
+| [suika/engine](suika/engine) | pygame / pymunk 物理引擎、headless 环境与水果规则 |
+| [suika/showcase](suika/showcase) | 回放网页、精选压缩 trace、训练图与 CSV |
+| [examples/suika_trials](examples/suika_trials) | 试验登记与历史训练评测日志 |
+| [suika/docs](suika/docs) | RL 设计、实验记录与基线诊断 |
+
+本地观看已发布回放，在仓库根目录运行：
 
 ```bash
-python -m rlforge.trainer --reward my_project.rewards:my_fn ...
+python3 -m http.server 8791 --bind 127.0.0.1
 ```
 
-See [`examples/custom_reward/arith.py`](examples/custom_reward/arith.py) for a
-minimal annotated example (truncation detection, task-log counters, dataset-column
-pass-through). The built-in grader (`rlforge.rewards.mcq`) scores MCQ letters and
-5-choice ranking chains, and writes per-task / per-source reward/accuracy/
-truncation counters to `$RLFORGE_TASK_LOG` — the report turns them into curves.
-Eval and training import the same grader code, so numbers are comparable by
-construction.
+打开 <http://127.0.0.1:8791/suika/showcase/web/index.html>。回放直接读取保存的 JSON.gz，不需要 GPU 或模型权重。Chrome、Edge、Safari 的当前版本均支持浏览器内 gzip 解压。
 
-## Agentic RL harness (preview)
+训练环境需要 PyTorch、NumPy、PyYAML、pygame 与 pymunk 6.x。节点路径和部署配置在 [suika/rl/configs](suika/rl/configs) 中；训练和评测通过 [env.py](suika/rl/env.py) 使用同一环境。
 
-The first agent harness now follows the Qwen3.5-friendly **text ReAct + MCP** path:
-the model emits a bounded `Action` / `Action Input`, rlforge calls the registered MCP
-server, and returns an `Observation` for the next ReAct step. It does not send OpenAI
-`tools` schemas on this default path. Local KB lookup and arithmetic remain built-in
-tools. MCP uses the official [Python SDK](https://github.com/modelcontextprotocol/python-sdk)
-and accepts the stdio `mcpServers` config shape shown by [Qwen-Agent](https://github.com/QwenLM/Qwen-Agent).
-MCP server entries launch local processes, so use only trusted configs. A legacy
-`--protocol openai-tools` mode remains available for endpoints that expose native tool calls.
+## 来源
 
-```bash
-pip install -e '.[agent-mcp]'
-```
+物理引擎基于 [Ole-Batting/suika](https://github.com/Ole-Batting/suika)（MIT），本项目增加训练、评测、规则支持与可视化。保留引擎目录的原始署名和许可。仓库许可见 [LICENSE](LICENSE)。
 
-MCP config example (`mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "time": {
-      "command": "uvx",
-      "args": ["mcp-server-time", "--local-timezone=Asia/Shanghai"]
-    }
-  }
-}
-```
-
-Run against a Qwen3.5 OpenAI-compatible endpoint (non-thinking defaults match the
-model-card text-task recipe; thinking is opt-in because 0.8B can loop):
-
-```bash
-export RLFORGE_API_KEY=EMPTY
-rlforge-agentic --data data/train.jsonl --model "Qwen/Qwen3.5-0.8B" \
-  --base-url http://localhost:8000/v1 --mcp-config mcp.json \
-  --import-kb /path/to/kb_swarm.json --kb runs/agentic/knowledge.sqlite3 \
-  --out runs/agentic/episodes.jsonl --split train --num-generations 8 \
-  --max-tool-calls 4 --max-rounds 6 --max-tool-result-chars 4000 \
-  --max-context-tokens 24576 --max-completion-tokens 16384
-```
-
-To turn on the persistent file SkillBank prototype, create files under `general/`,
-`task_specific/<family>/`, and `common_mistakes/`, then pass `--memory-files`:
-
-```bash
-rlforge-agentic --data data/train.jsonl --model "Qwen/Qwen3.5-0.8B" \
-  --base-url http://localhost:8000/v1 --mcp-config mcp.json \
-  --memory-files runs/agentic/skillbank --memory-evidence-db runs/agentic/skillbank_evidence.sqlite3 \
-  --kb runs/agentic/knowledge.sqlite3 --out runs/agentic/episodes.jsonl \
-  --split train --num-generations 8 --min-skill-support 2
-```
-
-The model can list, read, create/edit, and rename `.md` files by filename. Each
-rollout gets an isolated copy; an edit reaches the shared SkillBank only after a
-successful training reward and matching content from at least two distinct task/pair
-keys. Held-out splits never receive pending failure candidates and never promote edits.
-The tool is confined to Markdown inside the SkillBank, enforces path/symlink/size limits,
-requires the last-read hash for edits, and uses conflict checks before promotion. Changes,
-rewards, provenance keys, promotion decisions, and before/after bank hashes are logged
-per episode. Task-specific retrieval uses `task_specific/<family>/`; `general/` and
-`common_mistakes/` are cross-task categories.
-
-This is a **SkillRL-inspired prototype**, not a reproduction of the paper: it has
-lexical top-k retrieval, per-episode file proposals, reward/support-gated promotion,
-and retrieval of relevant unvalidated failed edits as candidates. It does not yet
-implement an LLM skill-distillation/evolution job, embedding retrieval, category-level
-validation-accuracy triggers, or automatic rewriting/pruning of existing skills. A
-proper evolution controller should consume train/dev failures only and keep final
-held-out evaluation sealed.
-
-The harness keeps a provenance-aware SQLite knowledge base, applies terminal-loss
-rewards, logs bounded episode traces and context estimates, and can export group-relative
-terminal advantages. Evaluation episodes cannot write to the KB; learned claims require
-successful training outcomes and support from distinct task/pair provenance. Context
-budgets are harness-side gates, not model context extensions or measurements of actual
-KV-cache allocation. FP8 KV can reduce cache memory but does not reduce the token cost of
-ReAct observations. Historical ArchitectureIQ KB v4 JSON (`{"claims":[...]}`) imports
-directly; its curation/leakage audit remains the experiment owner's responsibility.
-
-This is a tested agent/tool orchestration harness, **not yet a model-training path**:
-`gspo_advantage` is an auditable rollout signal, not a trainer input. It does not compute
-actor token log-probabilities or update weights. GSPO training integration must preserve
-the full ReAct action/observation token trajectory and align its terminal reward before
-it can train the policy; do not treat the current API-generated episodes as an actual
-GSPO run.
-
-
-## The GSPO contract (what we got wrong before you)
-
-- **Normalization matters more than the ratio.** Averaging the loss over the
-  global token count weights every sequence by its length; combined with a `-2`
-  truncation penalty, the longest (truncated) sequences dominate the gradient and
-  the policy collapsed ~12x faster than token-level GRPO at the same lr. Use
-  `seq_mean` (uniform per sequence) — it's also the paper's objective.
-- **Token-level clip values are a no-op at sequence level.** eps=0.2/0.28 never
-  engages on a per-sequence ratio. The paper's 3e-4/4e-4 is right for on-policy;
-  with staleness >1, calibrate empirically (we run 0.007/0.008 at staleness 3)
-  and watch `gspo/seq_clip_low_frac` — sustained ≥0.5 is the collapse signature.
-- **Off-policy depth pushes ρ below 1 systematically.** With staleness ≥2 the
-  low-side clip does real work; that's the safe direction, but read it together
-  with the held-out curve, not alone.
-
-`tests/test_gspo_core.py` pins all of this: ratio, both normalizations, clip
-engagement, gradient direction, and zero-gradient-outside-clip, against a naive
-reference implementation.
-
-## Precision recipes
-
-RL updates are tiny; in pure bf16 they can be rounded away entirely. The launcher
-exposes both knobs (`DTYPE` × `MIXED_PRECISION`); for low-precision work use
-**fp32 master weights + bf16 compute** (`DTYPE=none MIXED_PRECISION=bf16`).
-Full rationale and verification procedure: [`docs/PRECISION.md`](docs/PRECISION.md).
-
-## The RL panel
-
-SwanLab is the default local experiment tracker (`REPORT_TO=swanlab`) for RL,
-SFT, and custom PyTorch runs; `scripts/panel.sh` opens its local dashboard. The
-built-in HTML report provides RL-specific breakdowns generic trackers cannot
-infer (per-task reward vs accuracy vs truncation, held-out ladder, GSPO health).
-Details: [`docs/PANEL.md`](docs/PANEL.md).
-
-## Pitfalls this framework guards against
-
-1. **TRL's 120s request timeout** kills slow-but-fine long completions forever →
-   set `--request-timeout` for the worst case (we use 3600).
-2. **Reward parsers that test one separator** (`">" in gold`) silently mis-score
-   every ranking answer when the key format changes → shape-based detection.
-3. **Truncated completions scored as "unparseable"** → the reward sees token
-   counts, and `-2` actually fires.
-4. **Eval numbers without generation conditions** → the eval report records
-   decoding params, truncation rate, per-task breakdown and a constant baseline.
-5. **save_total_limit deleting your peak** → watchdog copies the best checkpoint
-   to `keep_best/` the moment a new best eval lands.
-6. **Missing tokenizer files in checkpoints** → the evaluator builds a shim from
-   the base model (never weights).
-
-## Repo layout
-
-```
-src/rlforge/trainer.py    GSPOAsyncGRPOTrainer + CLI (python -m rlforge.trainer)
-src/rlforge/gspo.py       naive reference math for the GSPO loss
-src/rlforge/rewards/      reward protocol + built-in MCQ/ranking grader
-src/rlforge/agentic.py    bounded ReAct episodes + group-relative terminal rewards
-src/rlforge/knowledge.py  provenance-aware persistent cross-task KB
-src/rlforge/agent_tools.py + agent_policy.py  tool contracts + OpenAI-compatible policy
-src/rlforge/agent_cli.py  API-backed agent harness CLI
-src/rlforge/eval_mcq.py   held-out evaluator (vLLM), shared scoring path
-src/rlforge/watchdog.py   in-loop eval / keep-best / auto-stop
-src/rlforge/report.py     auto HTML report (RL-specific panel)
-scripts/run_async_dp.sh   single-node launcher (vLLM server + DP trainer)
-scripts/panel.sh          SwanLab local dashboard over tracked runs
-tests/                    GSPO core math + reward/parser tests
-examples/aiq_mcq/         data format + a runnable example config
-examples/custom_reward/   minimal annotated custom reward
-examples/accelerate/      FSDP single-node config (for >3B full-parameter)
-docs/                     ROADMAP / PRECISION / PANEL / COMPATIBILITY
-```
-
-## Docs
-
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — where this is going (low-precision,
-  KV cache, FSDP, VLA) and what is explicitly out of scope.
-- [`docs/PRECISION.md`](docs/PRECISION.md) — bf16/fp32-master recipes, fp8 path.
-- [`docs/PANEL.md`](docs/PANEL.md) — SwanLab local tracking plus RL-specific reports.
-- [`docs/rl_trials.md`](docs/rl_trials.md) — algorithm-neutral RL trials, Suika history import, and the localhost panel.
-- [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) — backbone checklist and notes
-  for plugging in external small-RL projects (incl. Qwen3.5-0.8B game-RL arms).
-
-## Citation
-
-GSPO: [arXiv 2507.18071](https://arxiv.org/abs/2507.18071). Built on TRL and vLLM.
-
-## License
-
-Apache-2.0
+成果与公开数据更新于 **2026-10-05**。
