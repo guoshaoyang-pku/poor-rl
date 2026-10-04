@@ -116,17 +116,26 @@
     if (pref) sel.value = pref.name;
     sel.onchange = function () {
       if (sel.value === "__play__") enterPlay();
-      else { exitPlay(); loadTrace(sel.value); }
+      else { exitPlay(); selectTrace(sel.value); }
     };
     if (psel) psel.onchange = function () {
       // picking a match from the play view always previews the WHOLE trajectory
       if (psel.value === "__play__") { enterPlay(); return; }
-      exitPlay(); loadTrace(psel.value, true);
+      exitPlay(); selectTrace(psel.value, true);
     };
     renderArena();
     if (wantPlay) { state.pinned = true; enterPlay(); return; }
     if (pref) loadTrace(pref.name);
     else { $("#loading").classList.add("show"); $("#loading").textContent = "manifest 中没有 trace"; }
+  }
+
+  function selectTrace(name, autoplay) {
+    var url = new URL(location.href);
+    url.searchParams.set("game", name);
+    ["frame", "step", "tab"].forEach(function (key) { url.searchParams.delete(key); });
+    history.replaceState(null, "", url);
+    Q = new URLSearchParams(url.search);
+    loadTrace(name, autoplay);
   }
 
   function loadTrace(name, autoplay) {
