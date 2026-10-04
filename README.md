@@ -21,7 +21,7 @@ on a single GPU node, fully offline.
 | **Algorithm** | | |
 | ✅ | Async GSPO/GRPO training | TRL `AsyncGRPOTrainer` + vLLM rollout server, static GPU split (e.g. 4+4), staleness up to 3 validated |
 | ✅ | Sequence-level IS with `seq_mean` normalization | The GSPO paper's objective; ratio/normalization/clip math pinned by `tests/test_gspo_core.py` |
-| ✅ | Adaptive clip-fraction caps | Widens `eps` up to `GSPO_EPS_MAX` when the clipped-sequence fraction exceeds budget; `gspo/eps_*` and advantage-gated `gspo/seq_active_clip_*` metrics |
+| 🔶 | Adaptive clip-fraction caps | Widens `eps` up to `GSPO_EPS_MAX` when the clipped-sequence fraction exceeds budget; math + tests in `src/rlforge/gspo.py` / `tests/test_gspo_core.py`. Not yet wired into the v3.2 production trainer (fixed eps there) |
 | ✅ | Length-aware truncation penalty | Reward sees token counts; `-2` on cap hit actually fires |
 | ✅ | Custom reward protocol | Any `module:function`; built-in MCQ/ranking grader with per-task/source counters |
 | 🔶 | Agentic ReAct + MCP harness (preview) | Bounded episodes, provenance KB, SkillBank prototype; rollout signal only, not yet a training path ([`docs/AGENTIC.md`](docs/AGENTIC.md)) |

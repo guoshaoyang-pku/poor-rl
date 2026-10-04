@@ -48,6 +48,7 @@ def parse_trainer_log(path: Path) -> list[dict]:
             "meanlen": g("completions/mean_length"),
             "trunc": g("completions/clipped_ratio"),
             "seq_clip_low": g("gspo/seq_clip_low_frac"),
+            "seq_clip_high": g("gspo/seq_clip_high_frac"),
             "lr": g("learning_rate"),
             "step_s": g("perf/step_s"),
         })
@@ -224,9 +225,11 @@ def figs(steps, tasks, evals, base, out: Path):
         axes[0, 0].set_yscale("log"); axes[0, 0].set_ylabel("mean completion tokens")
         axes[0, 1].plot(xs, [r["entropy"] for r in steps], color="tab:orange")
         axes[0, 1].set_ylabel("entropy")
-        axes[1, 0].plot(xs, [r["seq_clip_low"] for r in steps], color="tab:brown")
-        axes[1, 0].set_ylabel("GSPO seq_clip_low frac"); axes[1, 0].set_xlabel("step")
-        axes[1, 0].axhline(0.5, ls="--", color="red", alpha=0.5)
+        axes[1, 0].plot(xs, [100 * r["seq_clip_low"] for r in steps], color="tab:blue", label="low-side clipped")
+        axes[1, 0].plot(xs, [100 * r["seq_clip_high"] for r in steps], color="tab:orange", label="high-side clipped")
+        axes[1, 0].set_ylabel("sequences clipped (%)"); axes[1, 0].set_xlabel("step")
+        axes[1, 0].set_ylim(0, 100); axes[1, 0].legend(fontsize=8)
+        axes[1, 0].axhline(50, ls="--", color="red", alpha=0.35)
         axes[1, 1].plot(xs, [r["kl"] for r in steps], color="tab:cyan")
         axes[1, 1].set_ylabel("KL"); axes[1, 1].set_xlabel("step")
         fig.tight_layout(); fig.savefig(out / "fig4_length_health.png"); plt.close(fig)
@@ -259,9 +262,7 @@ common order). The number a data-blind policy gets.</li>
 <li><b>mean completion tokens</b>: generated length. This run converged to direct answers
 (~16 tokens) from verbose CoT (~10k).</li>
 <li><b>truncation frac</b>: share of completions hitting the 16384-token cap (reward -2).</li>
-<li><b>GSPO seq_clip_low frac</b>: share of sequences whose sequence-level importance ratio
-rho hit the lower clip epsilon (0.007). Sustained &ge; 0.5 = the arm-C collapse signature;
-this run stays &lt; 0.1.</li>
+<li><b>GSPO seq_clip_low / seq_clip_high (%)</b>: share of completion sequences whose sequence-level importance ratio crossed the lower / upper clipping boundary for that training step; these are distinct from token-level clipping and show how much sequence data is clipped on each side. The effective unclipped share is 100% - low - high when the logged masks are disjoint.</li>
 </ul>
 """
 

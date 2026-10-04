@@ -10,6 +10,50 @@ sequences, return (rho, token_loss, seq_mean_loss).
 from __future__ import annotations
 
 
+def adaptive_clip_eps(
+    rho,
+    eps_low: float,
+    eps_high: float,
+    max_low_frac: float,
+    max_high_frac: float,
+    max_eps: float,
+):
+    import math
+
+    if rho.ndim != 1:
+        raise ValueError("rho must be a 1D tensor")
+    if not 0 < max_low_frac < 1 or not 0 < max_high_frac < 1:
+        raise ValueError("clip-fraction caps must be strictly between 0 and 1")
+    if max_eps < max(eps_low, eps_high):
+        raise ValueError("max_eps must be at least both base eps values")
+    if rho.numel() == 0:
+        return eps_low, eps_high
+
+    count = rho.numel()
+    low_eps = eps_low
+    high_eps = eps_high
+    allowed_low = math.floor(max_low_frac * count)
+    allowed_high = math.floor(max_high_frac * count)
+
+    ascending = rho.sort().values
+    if torch_count(rho < 1 - low_eps) > allowed_low:
+        low_eps = max(low_eps, min(max_eps, float((1 - ascending[allowed_low]).item())))
+    if torch_count(rho < 1 - low_eps) > allowed_low:
+        raise ValueError("max_eps cannot satisfy the requested low-side clip cap")
+
+    descending = rho.sort(descending=True).values
+    if torch_count(rho > 1 + high_eps) > allowed_high:
+        high_eps = max(high_eps, min(max_eps, float((descending[allowed_high] - 1).item())))
+    if torch_count(rho > 1 + high_eps) > allowed_high:
+        raise ValueError("max_eps cannot satisfy the requested high-side clip cap")
+
+    return low_eps, high_eps
+
+
+def torch_count(mask) -> int:
+    return int(mask.sum().item())
+
+
 def reference_gspo(log_ratios, advantages, masks, eps_low: float, eps_high: float):
     """Naive per-sequence GSPO. Returns (rho, loss_token, loss_seq_mean).
 
