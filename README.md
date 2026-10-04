@@ -1,4 +1,6 @@
-# rlforge
+# PoorRL
+
+**High-performance reinforcement learning on a small GPU budget.**
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
@@ -50,7 +52,7 @@ for scope and explicitly out-of-scope items.
 
 ## Why not just TRL / verl?
 
-| | rlforge | TRL stock | verl |
+| | PoorRL | TRL stock | verl |
 |---|---|---|---|
 | GSPO sequence-level IS | yes, with `seq_mean` normalization | sync only, token-mean normalization | yes (set `loss_agg_mode=seq-mean-token-mean`) |
 | Async rollout (staleness) | yes, static GPU split (e.g. 4+4) | yes (experimental) | colocate or separate_async |
