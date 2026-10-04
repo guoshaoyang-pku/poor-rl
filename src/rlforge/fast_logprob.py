@@ -68,8 +68,32 @@ def _compute_dtype(h):
     return torch.get_autocast_dtype("cuda") if torch.is_autocast_enabled("cuda") else h.dtype
 
 
-def _stats(h, wc, targets, logit_scale, inv_t):
+def _fp8_head_cache(weight):
+    from rlforge.fp8 import _quantize_tensor, quantize_rows
+    key = (weight._version, weight.data_ptr(), VOCAB_CHUNK)
+    cached = getattr(weight, "_rlforge_fp8_head_cache", None)
+    if cached is None or cached[0] != key:
+        quantized, scales = quantize_rows(weight.detach())
+        backward = []
+        for v0 in range(0, weight.shape[0], VOCAB_CHUNK):
+            backward.append(_quantize_tensor(weight.detach()[v0:v0 + VOCAB_CHUNK],
+                                              torch.float8_e4m3fn, transpose=True))
+        cached = key, quantized, scales, backward
+        weight._rlforge_fp8_head_cache = cached
+    return cached[1:]
+
+
+def _stats(h, wc, targets, logit_scale, inv_t, fp8_cache=None, *, graph=True):
     """(log_z, logprob, entropy) fp32 [N] for bf16 h [N,H] and bf16 head wc [V,H]."""
+    if fp8_cache is not None and graph and os.environ.get("RLFORGE_FP8_HEAD_GRAPH", "0") == "1":
+        from rlforge.fp8 import graph_replay
+        wq, ws, _ = fp8_cache
+
+        def forward(h, targets, weight, scales):
+            return _stats(h, weight, targets, logit_scale, inv_t, (weight, scales, ()), graph=False)
+
+        return graph_replay(("head_forward", logit_scale, inv_t, TOK_CHUNK, VOCAB_CHUNK),
+                            forward, (h, targets, wq, ws))
     N = h.shape[0]
     V = wc.shape[0]
     dev = h.device
@@ -85,9 +109,14 @@ def _stats(h, wc, targets, logit_scale, inv_t):
         se = torch.zeros(n, device=dev, dtype=torch.float32)
         xse = torch.zeros(n, device=dev, dtype=torch.float32)
         tl = torch.zeros(n, device=dev, dtype=torch.float32)
+        if fp8_cache is not None:
+            from rlforge.fp8 import forward_mm, quantize_rows
+            hq, hs = quantize_rows(hc)
+            wq, ws, _ = fp8_cache
         for v0 in range(0, V, VOCAB_CHUNK):
             v1 = min(V, v0 + VOCAB_CHUNK)
-            l = hc @ wc[v0:v1].t()  # bf16 out, fp32 accumulate (TRL: torch.mm(..., out=bf16 buf))
+            l = (hc @ wc[v0:v1].t() if fp8_cache is None else
+                 forward_mm(hq, wq[v0:v1], hs, ws[v0:v1]))
             in_chunk = (tg >= v0) & (tg < v1)
             loc = torch.clamp(tg - v0, 0, v1 - v0 - 1)
             m, se, xse, tl = _fwd_tile_c(l, m, se, xse, tl, loc, in_chunk, logit_scale, inv_t)
@@ -98,17 +127,69 @@ def _stats(h, wc, targets, logit_scale, inv_t):
     return log_z, logp, ent
 
 
+def _fp8_backward(h, targets, log_z, ent, g, ge, fp8_cache, need_h, need_w, ls, inv_t, *, graph=True):
+    from rlforge.fp8 import _quantize_dual, _quantize_tensor, forward_mm, quantize_rows, scaled_mm
+    wq, ws, backward_weights = fp8_cache
+    if graph and os.environ.get("RLFORGE_FP8_HEAD_GRAPH", "0") == "1":
+        from rlforge.fp8 import graph_replay
+        has_entropy = ge is not None
+        inputs = (h, targets, log_z, ent, g, *(() if ge is None else (ge,)), wq, ws,
+                  *(value for pair in backward_weights for value in pair))
+
+        def backward(*values):
+            hv, tv, zv, ev, gv = values[:5]
+            offset = 6 if has_entropy else 5
+            gev = values[5] if has_entropy else None
+            qv, sv = values[offset:offset + 2]
+            bw = tuple(zip(values[offset + 2::2], values[offset + 3::2]))
+            dh, dw = _fp8_backward(hv, tv, zv, ev, gv, gev, (qv, sv, bw),
+                                   need_h, need_w, ls, inv_t, graph=False)
+            return tuple(v for v in (dh, dw) if v is not None)
+
+        outputs = iter(graph_replay(("head_backward", has_entropy, need_h, need_w, ls, inv_t,
+                                    TOK_CHUNK, VOCAB_CHUNK), backward, inputs))
+        return next(outputs) if need_h else None, next(outputs) if need_w else None
+    n, hidden = h.shape
+    vocab = wq.shape[0]
+    grad_h = torch.zeros(n, hidden, device=h.device, dtype=torch.float32) if need_h else None
+    grad_w = torch.zeros(vocab, hidden, device=h.device, dtype=torch.float32) if need_w else None
+    for t0 in range(0, n, TOK_CHUNK):
+        t1 = min(n, t0 + TOK_CHUNK)
+        hc, tg = h[t0:t1], targets[t0:t1]
+        hq, hs = quantize_rows(hc)
+        if need_w:
+            pad = (-(t1 - t0)) % 16
+            hp = torch.nn.functional.pad(hc, (0, 0, 0, pad)) if pad else hc
+            htq, hts = _quantize_tensor(hp, torch.float8_e4m3fn, transpose=True)
+        for vi, v0 in enumerate(range(0, vocab, VOCAB_CHUNK)):
+            v1 = min(vocab, v0 + VOCAB_CHUNK)
+            l = forward_mm(hq, wq[v0:v1], hs, ws[v0:v1])
+            in_chunk = (tg >= v0) & (tg < v1)
+            loc = torch.clamp(tg - v0, 0, v1 - v0 - 1)
+            gl = _bwd_tile_c(l, log_z[t0:t1], g[t0:t1], None if ge is None else ge[t0:t1],
+                             ent[t0:t1], loc, in_chunk, ls, inv_t, torch.float32)
+            gq, gtq, gs = _quantize_dual(gl, torch.float8_e5m2)
+            if need_h:
+                wtq, wts = backward_weights[vi]
+                grad_h[t0:t1] += scaled_mm(gq, wtq, gs, wts, out_dtype=torch.float32)
+            if need_w:
+                grad_w[v0:v1] += scaled_mm(gtq, htq, gs, hts, out_dtype=torch.float32)
+    return grad_h, grad_w
+
+
 class FastChunkedLogProb(torch.autograd.Function):
     @staticmethod
     def forward(ctx, hidden, weight, targets, temperature, logit_scale):
         ctx.set_materialize_grads(False)
         cd = _compute_dtype(hidden)
         h = hidden.to(cd)
-        wc = weight.to(cd)
+        fp8_cache = _fp8_head_cache(weight) if getattr(weight, "_rlforge_fp8_head", False) else None
+        wc = weight if fp8_cache is not None else weight.to(cd)
         inv_t = 1.0 / temperature
-        log_z, logp, ent = _stats(h, wc, targets, float(logit_scale), inv_t)
+        log_z, logp, ent = _stats(h, wc, targets, float(logit_scale), inv_t, fp8_cache)
         ctx.save_for_backward(hidden, weight, targets, log_z, ent)
         ctx.cd, ctx.inv_t, ctx.logit_scale = cd, inv_t, float(logit_scale)
+        ctx.fp8_cache = fp8_cache
         return logp, ent
 
     @staticmethod
@@ -122,9 +203,14 @@ class FastChunkedLogProb(torch.autograd.Function):
         V = weight.shape[0]
         dev = hidden.device
         h = hidden.to(cd)
-        wc = weight.to(cd)
+        wc = weight if ctx.fp8_cache is not None else weight.to(cd)
         g = g_lp.float() if g_lp is not None else torch.zeros(N, device=dev)
         ge = g_ent.float() if g_ent is not None else None
+        if ctx.fp8_cache is not None:
+            grad_h, grad_w = _fp8_backward(h, targets, log_z, ent, g, ge, ctx.fp8_cache,
+                                          need_h, need_w, ls, inv_t)
+            return (grad_h.to(hidden.dtype) if need_h else None,
+                    grad_w.to(weight.dtype) if need_w else None, None, None, None)
         mode = BWD_MODE
         gemm_dtype = torch.bfloat16 if mode == "bf16" else torch.float32
         hf = h if mode == "bf16" else None
@@ -172,6 +258,9 @@ def logprob_entropy(hidden, weight, bias, targets, temperature, logit_scale=1.0,
     if not torch.is_grad_enabled() or not (hidden.requires_grad or weight.requires_grad):
         with torch.no_grad():
             cd = _compute_dtype(hidden)
-            _, lp, ent = _stats(hidden.to(cd), weight.to(cd), targets, float(logit_scale), 1.0 / temperature)
+            fp8_cache = _fp8_head_cache(weight) if getattr(weight, "_rlforge_fp8_head", False) else None
+            wc = weight if fp8_cache is not None else weight.to(cd)
+            _, lp, ent = _stats(hidden.to(cd), wc, targets, float(logit_scale),
+                               1.0 / temperature, fp8_cache)
         return lp, ent
     return FastChunkedLogProb.apply(hidden, weight, targets, temperature, logit_scale)

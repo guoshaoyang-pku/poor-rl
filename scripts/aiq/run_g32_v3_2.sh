@@ -163,6 +163,17 @@ else
   FAST_LOGPROB="${FAST_LOGPROB:-0}"; SUBBATCH_TOKENS="${SUBBATCH_TOKENS:-0}"; SB_CKPT="${SB_CKPT:-all}"; BALANCE_ROWS="${BALANCE_ROWS:-off}"
 fi
 export RLFORGE_FAST_LOGPROB="$FAST_LOGPROB"
+FP8="${FP8:-off}"
+FP8_ALIGN="${FP8_ALIGN:-off}"
+case "$FP8" in off|native) ;; *) echo "FP8 must be off or native" >&2; exit 2 ;; esac
+case "$FP8_ALIGN" in off|vllm) ;; *) echo "FP8_ALIGN must be off or vllm" >&2; exit 2 ;; esac
+[ "$FP8_ALIGN" = "off" ] || [ "$FP8" = "native" ] || { echo "FP8_ALIGN=vllm requires FP8=native" >&2; exit 2; }
+if [ "$FP8" = "native" ]; then
+  [ "$DTYPE" = "none" ] && [ "$FAST_LOGPROB" = "1" ] && [ "$PREFIX_SHARE" = "on" ] \
+    || { echo "FP8=native requires FP32 masters, FAST_LOGPROB=1 and PREFIX_SHARE=on" >&2; exit 2; }
+  KV_DTYPE=auto
+  MIXED_PRECISION=bf16
+fi
 export RLFORGE_LOGPROB_BWD="${RLFORGE_LOGPROB_BWD:-tf32}"
 export RLFORGE_SB_ACT_GB="${RLFORGE_SB_ACT_GB:-80}"
 export RLFORGE_SB_MEM_FULL_KB="${RLFORGE_SB_MEM_FULL_KB:-128}" RLFORGE_SB_MEM_CKPT_KB="${RLFORGE_SB_MEM_CKPT_KB:-4.7}" RLFORGE_SB_MEM_BASE_KB="${RLFORGE_SB_MEM_BASE_KB:-16}"
@@ -250,6 +261,8 @@ fi
 
 EXTRA_ARGS=""
 [ "$DTYPE" = "bfloat16" ] && EXTRA_ARGS="$EXTRA_ARGS --dtype bfloat16"
+[ "$FP8" = "native" ] && EXTRA_ARGS="$EXTRA_ARGS --fp8 native"
+[ "$FP8_ALIGN" = "vllm" ] && EXTRA_ARGS="$EXTRA_ARGS --fp8-align vllm"
 if [ "$GSPO" = "1" ]; then
   EXTRA_ARGS="$EXTRA_ARGS --gspo --gspo-norm $GSPO_NORM --gspo-eps-low $GSPO_EPS_LOW --gspo-eps-high $GSPO_EPS_HIGH --gspo-dynamic-low-frac $GSPO_DYNAMIC_LOW_FRAC --per-seq-forward $PER_SEQ_FWD --kl-beta $KL_BETA"
 fi
@@ -278,6 +291,13 @@ export RLFORGE_TASK_LOG="${RLFORGE_TASK_LOG:-$OUT/task_split.jsonl}"
 export AIQ_SAMPLE_LOG="${AIQ_SAMPLE_LOG:-$OUT/rollout_samples.jsonl}"
 
 VLLM_EXTRA="${VLLM_EXTRA:-}"
+[ "$FP8" = "native" ] && VLLM_EXTRA="$VLLM_EXTRA --quantization poor_rl_fp8"
+FP8_VLLM_ARGS=()
+FP8_REMOTE_VLLM_ARGS=""
+if [ "$FP8_ALIGN" = "vllm" ]; then
+  FP8_VLLM_ARGS=(--additional-config '{"gdn_prefill_backend":"triton"}')
+  FP8_REMOTE_VLLM_ARGS="--additional-config '{\"gdn_prefill_backend\":\"triton\"}'"
+fi
 [ -n "${MAX_SEQS:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-num-seqs $MAX_SEQS"
 [ -n "${MAX_BATCHED:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-num-batched-tokens $MAX_BATCHED"
 [ -n "${MAX_CG:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-cudagraph-capture-size $MAX_CG"
@@ -406,14 +426,16 @@ cd $ROOT
 export VLLM_HOST_IP=$REMOTE_IP NCCL_SOCKET_IFNAME=$NCCL_SOCKET_IFNAME GLOO_SOCKET_IFNAME=$GLOO_SOCKET_IFNAME NCCL_IB_HCA='$NCCL_IB_HCA'
 export VLLM_USE_FLASHINFER_SAMPLER=0 VLLM_ALLREDUCE_USE_FLASHINFER=0 VLLM_SERVER_DEV_MODE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 export TMPDIR=$ROOT/tmp TRITON_CACHE_DIR=$ROOT/tmp/triton VLLM_CACHE_DIR=$ROOT/tmp/vllm CUDA_VISIBLE_DEVICES=$REMOTE_GPUS
-setsid nohup $VENV/bin/vllm serve $MODEL --headless --data-parallel-size-local $DP_REMOTE --data-parallel-start-rank $DP_LOCAL $VLLM_COMMON --weight-transfer-config '{\"backend\":\"nccl\"}' > $REMOTE_DIR/vllm_headless.log 2>&1 < /dev/null &
+setsid nohup $VENV/bin/vllm serve $MODEL --headless --data-parallel-size-local $DP_REMOTE --data-parallel-start-rank $DP_LOCAL $VLLM_COMMON $FP8_REMOTE_VLLM_ARGS --weight-transfer-config '{\"backend\":\"nccl\"}' > $REMOTE_DIR/vllm_headless.log 2>&1 < /dev/null &
 P=\$!
 echo \$P > $REMOTE_DIR/vllm_headless.pid
 sleep 2
 echo \"\$P \$(ps -o pgid= -p \$P | tr -d ' ')\""
 
 if [ "$DRY" = "1" ]; then
-  echo "[dry] head ($HEAD_HOST_LABEL): CUDA_VISIBLE_DEVICES=$SERVER_GPUS VLLM_SERVER_DEV_MODE=1 vllm serve $MODEL --port $PORT --api-server-count $API_SERVER_COUNT --data-parallel-size-local $DP_LOCAL $VLLM_COMMON --weight-transfer-config '{\"backend\":\"nccl\"}' > logs/vllm_dp${SUFFIX}.log"
+  FP8_DRY_VLLM_ARGS=""
+  [ "${#FP8_VLLM_ARGS[@]}" = "0" ] || printf -v FP8_DRY_VLLM_ARGS '%q ' "${FP8_VLLM_ARGS[@]}"
+  echo "[dry] head ($HEAD_HOST_LABEL): CUDA_VISIBLE_DEVICES=$SERVER_GPUS VLLM_SERVER_DEV_MODE=1 vllm serve $MODEL --port $PORT --api-server-count $API_SERVER_COUNT --data-parallel-size-local $DP_LOCAL $VLLM_COMMON $FP8_DRY_VLLM_ARGS --weight-transfer-config '{\"backend\":\"nccl\"}' > logs/vllm_dp${SUFFIX}.log"
   echo "[dry] remote ($REMOTE_SSH) script:"; echo "$REMOTE_SCRIPT" | sed 's/^/[dry]   /'
   echo "[dry] trainer: CUDA_VISIBLE_DEVICES=$TRAINER_GPUS ${ACC_LAUNCH[*]} ${TRAINER_ARGS[*]} $EXTRA_ARGS"
   echo "[dry] code: $RLFORGE_PKG trainer md5 $(md5sum "$RLFORGE_PKG/trainer.py" | cut -c1-32)"
@@ -496,7 +518,14 @@ manifest = {
         "max_model_len": int("$MAX_MODEL_LEN"),
         "no_thinking": "$NO_THINKING" == "1", "mixed_precision": "$MIXED_PRECISION",
         "trainer_dtype": "$DTYPE", "rollout_dtype": "bfloat16",
-        "kv_cache_dtype": "$KV_DTYPE", "rollout_quantization": "none",
+        "kv_cache_dtype": "$KV_DTYPE", "rollout_quantization": "poor_rl_fp8" if "$FP8" == "native" else "none",
+        "trainer_fp8": "$FP8",
+        "trainer_fp8_alignment": "$FP8_ALIGN",
+        "fp8_graphs": os.environ.get("RLFORGE_FP8_GRAPHS", "0"),
+        "fp8_graph_max_mb": os.environ.get("RLFORGE_FP8_GRAPH_MAX_MB", "1024"),
+        "fp8_head_graph": os.environ.get("RLFORGE_FP8_HEAD_GRAPH", "0"),
+        "fp8_fuse_mlp": os.environ.get("RLFORGE_FP8_FUSE_MLP", "1"),
+        "fp8_align_compile": os.environ.get("RLFORGE_FP8_ALIGN_COMPILE", "0"),
         "gpu_memory_utilization": "$GPU_MEM_UTIL",
     },
     "infra": {
@@ -574,7 +603,11 @@ manifest = {
     },
     "reward": {"spec": "$REWARD", "code_md5": md5("$REWARD_FILE"), "correct": 1.0, "wrong": 0.0, "unparsed": -0.5, "truncated": -2.0,
                "ranking": "exact=+1 else 0.5/inv", "parse": "last <answer> after last </think>", "cap": int("$MAX_COMPLETION")},
-    "command": "RUN_NAME=$RUN_NAME MAX_STEPS=$MAX_STEPS SAVE=$SAVE CPS=$CPS NGEN=$NGEN STALE=$STALE INFLIGHT=$INFLIGHT LR=$LR "
+    "command": "FP8=$FP8 FP8_ALIGN=$FP8_ALIGN DTYPE=$DTYPE "
+               "RLFORGE_FP8_GRAPHS=${RLFORGE_FP8_GRAPHS:-0} RLFORGE_FP8_GRAPH_MAX_MB=${RLFORGE_FP8_GRAPH_MAX_MB:-1024} "
+               "RLFORGE_FP8_HEAD_GRAPH=${RLFORGE_FP8_HEAD_GRAPH:-0} RLFORGE_FP8_FUSE_MLP=${RLFORGE_FP8_FUSE_MLP:-1} "
+               "RLFORGE_FP8_ALIGN_COMPILE=${RLFORGE_FP8_ALIGN_COMPILE:-0} "
+               "RUN_NAME=$RUN_NAME MAX_STEPS=$MAX_STEPS SAVE=$SAVE CPS=$CPS NGEN=$NGEN STALE=$STALE INFLIGHT=$INFLIGHT LR=$LR "
                "KL_BETA=$KL_BETA GSPO_EPS_LOW=$GSPO_EPS_LOW GSPO_EPS_HIGH=$GSPO_EPS_HIGH PREFIX_SHARE=$PREFIX_SHARE "
                "TOKEN_BUDGET=$TOKEN_BUDGET DP_ROUTE=$DP_ROUTE POSLOG_STEPS=$POSLOG_STEPS AIQ_HALLUC=$AIQ_HALLUC "
                "SCORE_CONC=$SCORE_CONC JUDGED_STALE=$JUDGED_STALE EARLY_HOOKS=$EARLY_HOOKS SCORE_TASK_MAX_S=$SCORE_TASK_MAX_S "
@@ -652,6 +685,7 @@ trap 'STOP_REASON="killed (SIGINT)";  teardown; exit 130' INT
 CUDA_VISIBLE_DEVICES=$SERVER_GPUS VLLM_SERVER_DEV_MODE=1 \
   vllm serve "$MODEL" --port "$PORT" --api-server-count "$API_SERVER_COUNT" --data-parallel-size-local "$DP_LOCAL" \
     $VLLM_COMMON --weight-transfer-config '{"backend":"nccl"}' \
+    "${FP8_VLLM_ARGS[@]}" \
     > "logs/vllm_dp${SUFFIX}.log" 2>&1 &
 SERVER_PID=$!
 echo "[dp] head vLLM pid $SERVER_PID (log logs/vllm_dp${SUFFIX}.log)"

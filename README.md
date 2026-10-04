@@ -35,6 +35,7 @@ on a single GPU node, fully offline.
 | **Infra** | | |
 | 🔶 | Full-parameter SFT path | Qwen native-thinking, strict data/template checks, resumable Trainer checkpoints; GPU recovery smoke still required before unattended launch |
 | ✅ | Precision stack | Default: **fp32 master weights + bf16 training compute + bf16 rollout inference** ([`docs/PRECISION.md`](docs/PRECISION.md)) |
+| 🔶 | Native FP8 training + rollout | FP32 masters/gradients/Adam; shared E4M3 CUTLASS forward, E5M2 gradient GEMMs with FP32 output. Optional exact conv compilation improves the aligned FP8 batch 1.435x; it still trails fused BF16. Four prefill completions pass alignment, one unique decode case fails. Total RL speed and long-run quality remain unvalidated ([`docs/RECIPE_FP8.md`](docs/RECIPE_FP8.md)) |
 | ✅ | fp8 KV cache | 1.82x KV capacity, accuracy-neutral in paired eval. **Not the 0.8B RL SOP**: at 0.8B the KV is never the bottleneck (7-51% used), fp8 KV buys no throughput and adds logprob mismatch, so production runs use `KV_DTYPE=auto` (bf16) ([`docs/SOP_0.8B.md`](docs/SOP_0.8B.md)) |
 | ✅ | Production v3.2 trainer path | Merged into `src/rlforge/` ([`docs/RECIPE_H200.md`](docs/RECIPE_H200.md)): prefix sharing with token-budget sub-batches, fused fast_logprob (5.4x fwd), rank load balancing, non-blocking judge scorer, stale-drop audit, group-affinity routing. v3.2 gate: dlog-ratio p99 <= 1.1e-7, grad cos >= 0.99994; 65 -> 37 s/step. Byte-identical v3.1 as-run snapshot in [`production/v3_1/`](production/v3_1/) |
 | ✅ | A100 27B LoRA e2e track | FSDP2/HSDP trainer + sm80 prefix share + multi-backend rollout router + adapter-only LoRA sync ([`docs/RECIPE_A100.md`](docs/RECIPE_A100.md)). CPU e2e verified; GPU smoke pending |
@@ -68,7 +69,8 @@ control (DQN etc.) use Stable-Baselines3/CleanRL; for ≥8B or multi-node use ve
 
 | Doc | Contents |
 |---|---|
-| [`docs/RECIPE_H200.md`](docs/RECIPE_H200.md) | H200 (sm90) recipe: the production v3.2 stack, launch, measured speedups, what does not transfer (FP4, fp8 training) |
+| [`docs/RECIPE_H200.md`](docs/RECIPE_H200.md) | H200 (sm90) recipe: the production v3.2 stack, launch, measured speedups and low-precision boundaries |
+| [`docs/RECIPE_FP8.md`](docs/RECIPE_FP8.md) | Experimental native FP8 full FT + rollout: FP32 master/gradient/optimizer contract, launch, fixed-batch performance and prefill alignment limits |
 | [`docs/RECIPE_A100.md`](docs/RECIPE_A100.md) | A100 (sm80) recipe: 27B LoRA e2e track — FSDP2/HSDP trainer, sm80 prefix share, rollout router, adapter-only sync |
 | [`docs/INFRA_HANDOFF.md`](docs/INFRA_HANDOFF.md) | 当前 RL infra 交接：架构、v2→v3 瓶颈链与实测提速、踩过的坑（症状→根因→修复→证据）、27B 经验、下一批杠杆 |
 | [`docs/SOP_0.8B.md`](docs/SOP_0.8B.md) | 0.8B 异步 GSPO 运行 SOP：布局、参数、在途/队列定量、judge 定量、预检、冒烟、监控、停止、从 checkpoint 重启 |
@@ -93,6 +95,7 @@ control (DQN etc.) use Stable-Baselines3/CleanRL; for ≥8B or multi-node use ve
 src/rlforge/trainer.py    GSPOAsyncGRPOTrainer + CLI (python -m rlforge.trainer), v3.2 throughput path
 src/rlforge/gspo.py       naive reference math + adaptive clip controller
 src/rlforge/prefix_share.py + fast_logprob.py + dp_route.py + score_loop.py + drop_audit.py  H200 production infra
+src/rlforge/fp8.py + fp8_serving.py + fp8_alignment.py  experimental native FP8 trainer/rollout
 src/rlforge/prefix_share_sm80.py + rollout/  A100 track: sm80 prefix share, multi-backend rollout router
 src/rlforge/rewards/      reward protocol + built-in MCQ/ranking grader
 src/rlforge/agentic.py    bounded ReAct episodes + group-relative terminal rewards

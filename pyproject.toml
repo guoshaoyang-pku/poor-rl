@@ -24,6 +24,9 @@ dependencies = [
 [project.scripts]
 rlforge-agentic = "rlforge.agent_cli:main"
 
+[project.entry-points."vllm.general_plugins"]
+poor_rl_fp8 = "rlforge.fp8_serving:register"
+
 [project.optional-dependencies]
 agent-mcp = ["mcp>=1.0"]
 dev = ["pytest>=8"]

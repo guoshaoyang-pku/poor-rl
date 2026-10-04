@@ -21,10 +21,29 @@ forward), so a 2e-6 update always lands, while the matmuls run at bf16 speed.
 
 ## Going lower than bf16
 
-- FP8 rollout is independent of actor precision. The launcher defaults to `KV_DTYPE=fp8` on the validated H200 setup; set `KV_DTYPE=auto` to disable it or compare against BF16/auto. It can reduce KV-cache memory substantially. On other accelerators, verify vLLM support before use.
+- `FP8=native` is the experimental full-parameter trainer/rollout recipe: FP32
+  masters, gradients and Adam states; shared E4M3 PTPC/CUTLASS forward; E5M2
+  gradient GEMMs with FP32 output. Dense SM90 and rollout TP=1 only. A fixed
+  32-completion forward/backward batch reached BF16 throughput parity with
+  alignment off and opt-in trainer CUDA graphs. The aligned eager configuration
+  was 1.90x slower than the fused BF16 reference; optional exact convolution
+  compilation improved the aligned path by 1.435x. Correct FP32 serving passed
+  four prefill completions from one prompt (maximum absolute mean log-ratio
+  0.001178), but one unique decode case failed the 0.004 gate (+0.006154).
+  Total RL speed and long-run quality remain
+  unvalidated. See
+  [`RECIPE_FP8.md`](RECIPE_FP8.md) for launch, optional prefill alignment and gates.
+- KV precision is independent of weight/GEMM precision. The general launcher
+  defaults to `KV_DTYPE=fp8`; the 0.8B v3.2 and native FP8 recipes use
+  `KV_DTYPE=auto` (BF16). FP8 KV can increase cache capacity; on other
+  accelerators, verify vLLM support before use.
 - Native CPU KV offload is a recommended serving SOP when long contexts or high concurrency need additional KV capacity. It passed a 512-request paired test with a 16-GiB CPU tier on vLLM 0.30 / H200 using FP8 KV; treat the result as workload-specific and revalidate throughput, request success, and host-memory pressure on the target backend.
 - CPU offload of actor/model parameters is separate from KV offload: FSDP2 parameter offload is implemented but remains disabled by default because measured training steps were about 64% slower. Use only when its memory savings are needed.
-- `ROLLOUT_QUANTIZATION=fp8` asks vLLM to quantize rollout weights/compute. It can save additional memory and is now measured on identical token ids against a bf16-weight control (see "Logprob-gap probe" below): FP8 multiplies per-token logprob noise ~5x while moving the **sequence-level** GSPO ratio by only ~1-3%. It pairs correctly with an fp32 LoRA adapter (`docs/LORA.md`). FP8 KV stays the validated default; FP8 weights remain an opt-in per-experiment choice, since long-run quality is still unproven.
+- `ROLLOUT_QUANTIZATION=fp8` selects vLLM's standalone FP8 rollout path; it does
+  not enable FP8 training. The historical probe below used a BF16 trainer with
+  an FP32 LoRA adapter and found sequence-ratio deviations of about 1–3%. Its
+  numeric results do not describe the shared native FP8 recipe. FP8 rollout
+  weights remain an opt-in choice because long-run quality is unproven.
 - Keep actor master weights FP32 (`DTYPE=none`) with BF16 autocast (`MIXED_PRECISION=bf16`) for this experiment. Do not raise the learning rate merely to compensate for FP8 inference; first check policy-ratio/clip health against a BF16 rollout control.
 - A high `gspo/seq_clip_low_frac` is **not** a precision symptom, and widening eps is not the fix. Measured cause on Qwen3.5-0.8B: the async trainer packs a rank's sequences into one forward with per-sequence `position_ids`, which does not reset the hybrid GatedDeltaNet layers' conv/recurrent state. BF16, FP8-weight and FP8-KV arms all show it, so it was never an FP8 finding. **A fix now exists** (`rlforge/hybrid_packing.py`, wired into `trainer.py`; see `docs/PACKING.md`) which makes the packed forward bit-exact against scoring each sample alone. The drift *magnitude and sign* recorded here (-0.10 to -0.62/token) came from a flash-attn3 backend on real prompts and is **under verification** against a later sdpa measurement that gave +4.6 to +4.7 on synthetic tokens -- treat both numbers as provisional, and read `docs/reports/FP4_LORA_VERIFICATION_HANDOFF_2026-10-03.md` §3 before relying on either.
 
@@ -33,7 +52,10 @@ forward), so a 2e-6 update always lands, while the matmuls run at bf16 speed.
 - With the same 24,576-token max model length, 0.85 GPU-memory utilization, eager mode, and single-GPU serving, `KV_DTYPE=fp8` reported 15,949,824 cached tokens (649.0 max-length sequences) vs 8,764,179 tokens (356.6 sequences) for BF16/auto KV: **1.82x cache capacity**. Both modes loaded and completed generation requests.
 - Paired evaluation used the same `async_dp_flip450` checkpoint-500, 50 held-out questions, two samples per question, T=1.0/top-p=1.0/max-tokens=16,384, 16 concurrent requests, and matched request seeds. Across three repeated passes, mean accuracy was 33.7% (auto) vs 35.0% (FP8); parse rate 95.7% vs 95.3%; truncation 0% in both. Median generated-token throughput was 284 vs 309 tokens/s (**+8.6%** FP8), while mean request latency was 1.54 vs 1.46 s. This is a small, single-model/task probe: no statistically reliable accuracy gain is claimed, and other prompt lengths/load levels may show different throughput.
 - FP8-weight GSPO was run for 3 steps on 360-1 H200 (vLLM 0.30, Qwen3.5-0.8B), with FP32 actor/master weights, BF16 autocast/compute, FP8 rollout weights, FP8 KV cache, 2e-6 LR, and matched 3-step BF16-weight control. Both completed live weight sync each step and produced changed FP32 checkpoints; nonzero gradients were observed (FP8 norm 9.1–16.1, BF16 norm 6.6–12.4). The brief run proves the training/sync/update path executes, **not** learning quality. Both arms showed very high `gspo/seq_clip_low_frac` (~0.98–1.00), so diagnose ratio/logprob alignment on a representative run before scaling up; FP8 weights are not approved as a production default.
-- FP8 KV cache is marked **operationally validated and default for H200 runs**. On unsupported accelerators or when investigating regressions, explicitly set `KV_DTYPE=auto`. Temporary vLLM services were stopped after testing; the only remaining GPU usage was an unrelated user-owned benchmark, left untouched.
+- These October 1 tests validated FP8 KV operation and made it the general
+  launcher's default. The current 0.8B v3.2 recipe uses BF16/auto KV because KV
+  capacity is not its bottleneck. Native FP8 GEMM tests also retain BF16/auto KV
+  to isolate weight/activation effects.
 
 ### Logprob-gap probe (2026-10-03, 360-1 H200, vLLM 0.30)
 
@@ -206,29 +228,26 @@ Fix: `export VLLM_USE_FLASHINFER_SAMPLER=0` (uses the native PyTorch sampler). T
 not 27B-specific and not quantization-specific -- it is a property of these images.
 Set it on both arms of any comparison so the sampler is held constant.
 
-### Why FP4 training is still not a thing here
+### Historical FP8 trainer comparison: corrected scope (2026-10-05)
 
-The trainer bottleneck is **not** GEMM. Profiler on a controlled bench: the GPU is
-saturated 620/629 ms = **98.6%**, but it is eaten by
-`vectorized_elementwise_kernel` + `elementwise_kernel` (~8.5 ms each x 37), while
-the actual GEMM kernels (`sm90_xmma_gemm`) total only **~92 ms ≈ 15%** of the step.
-FP8 kernel calls measured **812 ms vs 121 ms for bf16 (6.7x slower)**.
+The old 8k-token document recorded 41,715 tok/s for BF16 full FT, 30,983 for
+BF16 LoRA and 22,001 for FP8 LoRA. The quoted **0.53×** mixed FP8 LoRA with
+BF16 full FT; the same-LoRA comparison is **0.71×**. That result's raw JSON has
+not been recovered. The surviving 16k-token JSON records 27,599 / 19,763 / 12,170
+tok/s respectively; its code uses a BF16 frozen base, tensorwise FP8 and LoRA,
+not FP32-master FP8 full FT.
 
-Controlled trainer throughput (8192 tokens, fused-CE, no fp32-logits artifact):
+The 812/121 ms kernel comparison and 15% GEMM share have no recovered trace
+bound to the source version. They cannot establish a general Hopper limit or
+describe the current trainer. H200 supports native FP8; the implemented
+[`native FP8 recipe`](RECIPE_FP8.md) reaches BF16 parity with alignment off and
+opt-in trainer graphs on a fixed 32-completion forward/backward batch. The
+aligned configuration still trails fused BF16 and fails the decode gate.
+Original hashes and source review:
+[`FP8_HISTORY_2026-10-05.md`](reports/FP8_HISTORY_2026-10-05.md).
 
-| config | tok/s | vs bf16 full FT |
-|---|---:|---:|
-| bf16 full FT | 41,715 | 1.00x |
-| bf16 base + LoRA | 30,983 | 0.74x |
-| fp8 base + LoRA | 22,001 | 0.53x |
-
-So on Hopper, **both FP8 and FP4 are dead ends on the trainer side**: there are no
-FP4 tensor cores, `transformer_engine` is absent, and the GEMM that a lower
-precision could accelerate is only 15% of the step. Keep FP32 master + BF16 compute.
-
-**FP4 pays off only where it buys memory for KV capacity/concurrency** — i.e. at
-27B (bf16 54 GB -> MXFP4 ~13.5 GB frees ~40 GB), not at 0.8B (0.81 GiB saved,
-+1.6% KV tokens, -1.5% throughput).
+Native FP4 compute requires Blackwell; the H200 MXFP4 serving tests above use
+weight-only A16 kernels. No FP4 trainer path is implemented here.
 
 ## How to verify updates are not being eaten
 

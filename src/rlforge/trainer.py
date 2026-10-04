@@ -217,6 +217,10 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
                   f"global_samples={self._step_samples:.0f}", flush=True)
         self._audit_local_seqs = 0
         super()._log_step_metrics()
+        if getattr(self, "_native_fp8", False):
+            # TRL uses a dense BF16 FLOP estimate, which does not describe this hybrid FP8 path.
+            self._metrics["train"].pop("perf/mfu_fwd_bwd", None)
+            self._metrics["train"].pop("perf/mfu_wall_clock", None)
 
     def _sb_ckpt_layers(self, tokens):
         """Decoder layers to checkpoint for a sub-batch of ``tokens`` padded tokens (v3_2)."""
@@ -770,6 +774,12 @@ def main():
         help="none = mixed precision fp32 master weights; bfloat16 = pure bf16 (A/B test)",
     )
     ap.add_argument(
+        "--fp8", choices=["off", "native"], default="off",
+        help="native FP8 Linear forward/backward with FP32 master weights and gradients (Hopper)",
+    )
+    ap.add_argument("--fp8-align", choices=["off", "vllm"], default="off",
+                    help="experimental Qwen3.5 BF16 boundaries; rollout needs gdn_prefill_backend=triton")
+    ap.add_argument(
         "--gspo", action="store_true", help="GSPO sequence-level importance sampling"
     )
     ap.add_argument("--max-steps", type=int, default=0, help="0 = driven by epochs")
@@ -880,6 +890,8 @@ def main():
                          "(hung reward/judge; TRL's check_health then stops the run). Default: env "
                          "RLFORGE_SCORE_TASK_MAX_S, else max(600, 3 x AIQ_HALLUC_TIMEOUT_S).")
     args = ap.parse_args()
+    if args.fp8_align != "off" and args.fp8 != "native":
+        raise SystemExit("--fp8-align vllm requires --fp8 native")
 
     if (args.score_concurrency > 0 or args.reward_early_hooks
             or (args.judged_max_staleness is not None and args.judged_max_staleness >= 0)):
@@ -952,6 +964,15 @@ def main():
     )
     if args.dtype == "bfloat16":
         cfg_kwargs["dtype"] = "bfloat16"
+    if args.fp8 == "native":
+        if args.dtype != "none":
+            raise SystemExit("--fp8 native requires --dtype none (FP32 master weights)")
+        if args.optim not in (None, "adamw_torch", "adamw_torch_fused"):
+            raise SystemExit("--fp8 native requires FP32 Adam states: use adamw_torch or adamw_torch_fused")
+        if args.prefix_share != "on" or os.environ.get("RLFORGE_FAST_LOGPROB", "0") != "1":
+            raise SystemExit("--fp8 native requires --prefix-share on and RLFORGE_FAST_LOGPROB=1 "
+                             "so the FP8 LM head uses the shared training/serving forward")
+        cfg_kwargs["model_init_kwargs"] = {"dtype": torch.float32}
     if args.token_budget is not None:
         cfg_kwargs["token_budget"] = args.token_budget
     if args.queue_maxsize is not None:
@@ -1030,6 +1051,19 @@ def main():
         train_dataset=ds,
         **trainer_kwargs,
     )
+    if args.fp8 == "native":
+        from rlforge.fp8 import install as install_fp8
+        trainer._native_fp8 = True
+        policy = trainer.accelerator.unwrap_model(trainer.model)
+        fp8_layers = install_fp8(policy)
+        policy.lm_head.weight._rlforge_fp8_head = True
+        if args.fp8_align == "vllm":
+            from rlforge.fp8_alignment import install as align_forward
+            align_forward(policy, gdn=True)
+        print(f"[rlforge] native FP8 enabled on {len(fp8_layers)} projections; "
+              f"alignment={args.fp8_align}; FP32 masters/grads, BF16 KV, "
+              "FP32 optimizer states required; rollout must use the matching FP8 recipe; "
+              "dense BF16 MFU estimate omitted", flush=True)
     if args.drop_audit == "on":
         # Wraps get_train_dataloader (rank 0 only builds the queue dataset) and adds a step-end callback after
         # TRL's own; never touches which samples are trained or in what order (rlforge/drop_audit.py).

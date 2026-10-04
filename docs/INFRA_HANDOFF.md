@@ -371,7 +371,7 @@ tools/prefix_gate/                gate_v3_prefix.py、门禁结果 json、prefix
 另外几项：
 - **FP4 在 Hopper 上只换显存、不换速度**：没有 FP4 tensor core，Marlin 是 A16 kernel。
 - **LoRA 让 rollout 吞吐降约 15%** [实测，0.8B]。
-- **trainer 侧 FP8/FP4 是死路**：GEMM 只占 step 的约 15%；探针里 FP8 kernel 812 ms vs bf16 121 ms（6.7× 更慢）[实测]。
+- **旧 FP8 trainer 探针不足以否定原生 FP8 full FT**：旧测试是冻结 BF16 base 的 FP8 LoRA；6.7× kernel 结论未找到绑定源码的原始 trace。2026-10-05 的 FP32 主参数＋原生 FP8 前反向已通过执行验证；关闭对齐、开启 CUDA graphs 的固定 G32 探针与对应 BF16 对照持平。对齐路径卷积融合提速 1.435×，仍慢于 fused BF16；decode 一致性门槛未通过，完整 RL 收益与训练质量尚未验证。见 [`RECIPE_FP8.md`](RECIPE_FP8.md) 和[历史核对](reports/FP8_HISTORY_2026-10-05.md)。
 - 多模态 checkpoint 做 MXFP4 要排除 vision tower（`"ignore": ["*visual*"]`）；没有 nvcc 时要设 `VLLM_USE_FLASHINFER_SAMPLER=0` [实测]。
 
 ### 6.2 错的 / 未核实的

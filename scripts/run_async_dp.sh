@@ -63,6 +63,20 @@ NO_THINKING="${NO_THINKING:-0}"
 # FP8 KV is validated on H200; set KV_DTYPE=auto on unsupported hardware or to compare.
 KV_DTYPE="${KV_DTYPE:-fp8}"
 ROLLOUT_QUANTIZATION="${ROLLOUT_QUANTIZATION:-none}" # none or fp8; vLLM weight quantization
+FP8="${FP8:-off}" # native: matched FP8 trainer and poor_rl_fp8 rollout
+FP8_ALIGN="${FP8_ALIGN:-off}"
+case "$FP8" in off|native) ;; *) echo "FP8 must be off or native" >&2; exit 2 ;; esac
+case "$FP8_ALIGN" in off|vllm) ;; *) echo "FP8_ALIGN must be off or vllm" >&2; exit 2 ;; esac
+[ "$FP8_ALIGN" = "off" ] || [ "$FP8" = "native" ] || { echo "FP8_ALIGN=vllm requires FP8=native" >&2; exit 2; }
+if [ "$FP8" = "native" ]; then
+  [ "$DTYPE" = "none" ] || { echo "FP8=native requires DTYPE=none" >&2; exit 2; }
+  [ "${TP:-1}" = "1" ] || { echo "FP8=native requires TP=1" >&2; exit 2; }
+  TP=1
+  MIXED_PRECISION=bf16
+  ROLLOUT_QUANTIZATION=poor_rl_fp8
+  KV_DTYPE=auto
+  export RLFORGE_FAST_LOGPROB=1
+fi
 # LoRA (PEFT adapter training). LORA=1 freezes the base model, trains an fp32 adapter
 # (PEFT keeps adapters fp32 when the base is bf16) and -- with the server-side flags added
 # below -- syncs only the adapter each step (~1% of the bytes). The base can still be served
@@ -73,6 +87,10 @@ LORA_ALPHA="${LORA_ALPHA:-0}"   # 0 = 2 x r
 LORA_DROPOUT="${LORA_DROPOUT:-0.0}"
 LORA_TARGET_MODULES="${LORA_TARGET_MODULES:-q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj,in_proj_qkv,in_proj_z,in_proj_a,in_proj_b,out_proj}"
 GSPO="${GSPO:-1}"
+if [ "$FP8" = "native" ]; then
+  [ "$GSPO" = "1" ] && [ "$LORA" = "0" ] \
+    || { echo "FP8=native currently requires GSPO=1 and LORA=0" >&2; exit 2; }
+fi
 GSPO_NORM="${GSPO_NORM:-seq_mean}"
 GSPO_EPS_LOW="${GSPO_EPS_LOW:-3e-4}"
 GSPO_EPS_HIGH="${GSPO_EPS_HIGH:-4e-4}"
@@ -103,6 +121,8 @@ fi
 
 EXTRA_ARGS=""
 [ "$DTYPE" = "bfloat16" ] && EXTRA_ARGS="$EXTRA_ARGS --dtype bfloat16"
+[ "$FP8" = "native" ] && EXTRA_ARGS="$EXTRA_ARGS --fp8 native --prefix-share on --token-budget 0"
+[ "$FP8_ALIGN" = "vllm" ] && EXTRA_ARGS="$EXTRA_ARGS --fp8-align vllm"
 if [ "$GSPO" = "1" ]; then
   EXTRA_ARGS="$EXTRA_ARGS --gspo --gspo-norm $GSPO_NORM --gspo-eps-low $GSPO_EPS_LOW --gspo-eps-high $GSPO_EPS_HIGH"
   if [ -n "$ADAPT_CLIP_LOW_MAX_FRAC" ] || [ -n "$ADAPT_CLIP_HIGH_MAX_FRAC" ]; then
@@ -142,6 +162,14 @@ echo "[dp] perf: liger=$LIGER grad_ckpt=$GRAD_CKPT optim=${OPTIM:-default} tf32=
 # KV cache: KV_DTYPE=fp8 halves KV memory on Hopper/Blackwell (more concurrent
 # sequences); GPU_MEM_UTIL caps the rollout server's VRAM share.
 VLLM_EXTRA="${VLLM_EXTRA:-}"
+FP8_VLLM_ARGS=()
+ROLLOUT_DP=1
+if [ "$FP8" = "native" ]; then
+  IFS=, read -r -a FP8_ROLLOUT_GPUS <<< "$SERVER_GPUS"
+  ROLLOUT_DP="${#FP8_ROLLOUT_GPUS[@]}"
+  FP8_VLLM_ARGS=(--data-parallel-size "$ROLLOUT_DP" --data-parallel-size-local "$ROLLOUT_DP" --api-server-count "$ROLLOUT_DP")
+fi
+[ "$FP8_ALIGN" = "vllm" ] && FP8_VLLM_ARGS+=(--additional-config '{"gdn_prefill_backend":"triton"}')
 [ -n "${MAX_SEQS:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-num-seqs $MAX_SEQS"
 [ -n "${MAX_BATCHED:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-num-batched-tokens $MAX_BATCHED"
 [ -n "${MAX_CG:-}" ] && VLLM_EXTRA="$VLLM_EXTRA --max-cudagraph-capture-size $MAX_CG"
@@ -149,7 +177,8 @@ VLLM_EXTRA="${VLLM_EXTRA:-}"
 case "$ROLLOUT_QUANTIZATION" in
   none) ;;
   fp8) VLLM_EXTRA="$VLLM_EXTRA --quantization fp8" ;;
-  *) echo "ROLLOUT_QUANTIZATION must be none or fp8 (got $ROLLOUT_QUANTIZATION)" >&2; exit 2 ;;
+  poor_rl_fp8) VLLM_EXTRA="$VLLM_EXTRA --quantization poor_rl_fp8" ;;
+  *) echo "ROLLOUT_QUANTIZATION must be none, fp8 or poor_rl_fp8 (got $ROLLOUT_QUANTIZATION)" >&2; exit 2 ;;
 esac
 [ -n "${KV_DTYPE:-}" ] && [ "$KV_DTYPE" != "auto" ] && VLLM_EXTRA="$VLLM_EXTRA --kv-cache-dtype $KV_DTYPE"
 if [ "$LORA" = "1" ]; then
@@ -232,7 +261,7 @@ manifest = {
     "node": platform.node(),
     "started": time.strftime("%Y-%m-%d %H:%M:%S"),
     "stop_reason": None,
-    "gpu_layout": {"rollout_gpus": "$SERVER_GPUS", "tp": int("$TP"),
+    "gpu_layout": {"rollout_gpus": "$SERVER_GPUS", "tp": int("$TP"), "dp": int("$ROLLOUT_DP"),
                    "trainer_gpus": "$TRAINER_GPUS", "num_trainer": int("$NUM_TRAINER")},
     "code_md5": {os.path.basename(f): md5(f) for f in
                  sorted(__import__("glob").glob(os.path.join("$RLFORGE_PKG", "*.py")))},
@@ -255,6 +284,13 @@ manifest = {
         "save_total_limit": 4, "max_seqs": "${MAX_SEQS:-stock}",
         "max_batched": "${MAX_BATCHED:-stock}", "max_cg": "${MAX_CG:-stock}",
         "trainer_weight_dtype": "$DTYPE", "trainer_mixed_precision": "$MIXED_PRECISION",
+        "trainer_fp8": "$FP8",
+        "trainer_fp8_alignment": "$FP8_ALIGN",
+        "fp8_graphs": os.environ.get("RLFORGE_FP8_GRAPHS", "0"),
+        "fp8_graph_max_mb": os.environ.get("RLFORGE_FP8_GRAPH_MAX_MB", "1024"),
+        "fp8_head_graph": os.environ.get("RLFORGE_FP8_HEAD_GRAPH", "0"),
+        "fp8_fuse_mlp": os.environ.get("RLFORGE_FP8_FUSE_MLP", "1"),
+        "fp8_align_compile": os.environ.get("RLFORGE_FP8_ALIGN_COMPILE", "0"),
         "no_thinking": "$NO_THINKING" == "1",
         "tracker_backend": "$REPORT_TO", "swanlab_mode": "${SWANLAB_MODE:-disabled}",
         "rollout_dtype": "bfloat16", "rollout_quantization": "$ROLLOUT_QUANTIZATION",
@@ -265,7 +301,12 @@ manifest = {
     },
     "reward": {"correct": 1.0, "wrong": 0.0, "unparsed": -0.5, "truncated": -2.0,
                "ranking": "exact=+1 else concordant/5-1", "cap": int("$MAX_COMPLETION")},
-    "command": "GSPO=$GSPO CPS=$CPS NGEN=$NGEN STALE=$STALE INFLIGHT=$INFLIGHT LR=$LR "
+    "command": "FP8=$FP8 FP8_ALIGN=$FP8_ALIGN DTYPE=$DTYPE TP=$TP "
+               "SERVER_GPUS=$SERVER_GPUS TRAINER_GPUS=$TRAINER_GPUS NUM_TRAINER=$NUM_TRAINER "
+               "RLFORGE_FP8_GRAPHS=${RLFORGE_FP8_GRAPHS:-0} RLFORGE_FP8_GRAPH_MAX_MB=${RLFORGE_FP8_GRAPH_MAX_MB:-1024} "
+               "RLFORGE_FP8_HEAD_GRAPH=${RLFORGE_FP8_HEAD_GRAPH:-0} RLFORGE_FP8_FUSE_MLP=${RLFORGE_FP8_FUSE_MLP:-1} "
+               "RLFORGE_FP8_ALIGN_COMPILE=${RLFORGE_FP8_ALIGN_COMPILE:-0} "
+               "GSPO=$GSPO CPS=$CPS NGEN=$NGEN STALE=$STALE INFLIGHT=$INFLIGHT LR=$LR "
                "MAX_COMPLETION=$MAX_COMPLETION MAX_STEPS=${MAX_STEPS:-0} "
                "bash run_async_dp.sh $MODE $SUFFIX",
 }
@@ -282,6 +323,7 @@ CUDA_VISIBLE_DEVICES=$SERVER_GPUS VLLM_SERVER_DEV_MODE=1 \
     --port "$PORT" \
     --tensor-parallel-size "$TP" \
     --weight-transfer-config '{"backend":"nccl"}' \
+    "${FP8_VLLM_ARGS[@]}" \
     $VLLM_EXTRA \
     > "logs/vllm_dp${SUFFIX}.log" 2>&1 &
 SERVER_PID=$!
