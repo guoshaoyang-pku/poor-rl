@@ -124,21 +124,21 @@ if triton is not None:
         tl.store(Q + row * K + cols, q, cols < K)
         tl.store(S + row, scale)
 
-    @triton.jit
-    def _amax_kernel(X, PARTIAL, N: tl.constexpr, BLOCK: tl.constexpr):
+    @triton.jit(do_not_specialize=["N"])
+    def _amax_kernel(X, PARTIAL, N, BLOCK: tl.constexpr):
         idx = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
         x = tl.load(X + idx, idx < N, other=0).to(tl.float32)
         tl.store(PARTIAL + tl.program_id(0), tl.max(tl.abs(x), 0))
 
-    @triton.jit
-    def _amax_scale_kernel(PARTIAL, SCALE, N: tl.constexpr, LIMIT: tl.constexpr,
+    @triton.jit(do_not_specialize=["N"])
+    def _amax_scale_kernel(PARTIAL, SCALE, N, LIMIT: tl.constexpr,
                            BLOCK: tl.constexpr):
         idx = tl.arange(0, BLOCK)
         x = tl.load(PARTIAL + idx, idx < N, other=0)
         tl.store(SCALE, tl.maximum(tl.max(x, 0), 1e-12) / LIMIT)
 
-    @triton.jit
-    def _quantize_tensor_kernel(X, Q, S, M: tl.constexpr, N: tl.constexpr,
+    @triton.jit(do_not_specialize=["M"])
+    def _quantize_tensor_kernel(X, Q, S, M, N: tl.constexpr,
                                 TRANSPOSE: tl.constexpr, LIMIT: tl.constexpr,
                                 BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
         rows = tl.program_id(0) * BLOCK_M + tl.arange(0, BLOCK_M)
@@ -152,10 +152,11 @@ if triton is not None:
         else:
             tl.store(Q + rows[:, None] * N + cols[None, :], q, mask)
 
-    @triton.jit
-    def _quantize_dual_kernel(X, Q, QT, S, M: tl.constexpr, N: tl.constexpr,
-                              MP: tl.constexpr, LIMIT: tl.constexpr,
+    @triton.jit(do_not_specialize=["M", "MP"])
+    def _quantize_dual_kernel(X, Q, QT, S, M, N: tl.constexpr,
+                              MP, LIMIT: tl.constexpr,
                               BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
+        MP = tl.multiple_of(MP, 16)
         rows = tl.program_id(0) * BLOCK_M + tl.arange(0, BLOCK_M)
         cols = tl.program_id(1) * BLOCK_N + tl.arange(0, BLOCK_N)
         x = tl.load(X + rows[:, None] * N + cols[None, :],
@@ -163,7 +164,13 @@ if triton is not None:
         q = tl.minimum(tl.maximum(x / tl.load(S), -LIMIT), LIMIT)
         mask = (rows[:, None] < MP) & (cols[None, :] < N)
         tl.store(Q + rows[:, None] * N + cols[None, :], q, mask)
-        tl.store(QT + cols[None, :] * MP + rows[:, None], q, mask)
+        # Triton 3.7 can corrupt a reused FP8 layout conversion with runtime MP.
+        # Transpose in FP32 before the identity barrier and independent FP8 cast.
+        qt = tl.inline_asm_elementwise(
+            "mov.b32 $0, $1;", constraints="=f,f", args=[tl.trans(q)],
+            dtype=tl.float32, is_pure=False, pack=1)
+        tl.store(QT + cols[:, None] * MP + rows[None, :],
+                 qt, tl.trans(mask))
 
 
 def quantize_rows(x: torch.Tensor, dtype=torch.float8_e4m3fn):
@@ -376,6 +383,16 @@ def linear(x, weight, bias=None, *, cache=None):
 
 def _linear_forward(self, x):
     return linear(x, self.weight, self.bias, cache=_weight_cache(self))
+
+
+def register_optimizer_cache_hook(model, optimizer):
+    """Invalidate quantized master-weight caches after fused or ordinary optimizer steps."""
+    parameters = tuple(p for p in model.parameters() if p.requires_grad)
+
+    def after_step(optimizer, args, kwargs):
+        torch.autograd.graph.increment_version(parameters)
+
+    return optimizer.register_step_post_hook(after_step)
 
 
 def install(model, *, exclude=("lm_head", "in_proj_a", "in_proj_b"), require_fp32=True):

@@ -179,6 +179,15 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
                   f"{self._sb_kb_full} ckpt={self._sb_kb_ckpt} base={self._sb_kb_base}) "
                   f"bucket_lam={os.environ.get('RLFORGE_SB_BUCKET_LAM', '1024')}", flush=True)
 
+    def create_optimizer(self, *args, **kwargs):
+        optimizer = super().create_optimizer(*args, **kwargs)
+        if getattr(self, "_native_fp8", False) and not hasattr(self, "_fp8_optimizer_hook"):
+            from rlforge.fp8 import register_optimizer_cache_hook
+            policy = self.accelerator.unwrap_model(self.model)
+            self._fp8_optimizer_hook = register_optimizer_cache_hook(policy, optimizer)
+            print("[rlforge] FP8 optimizer post-step cache invalidation enabled", flush=True)
+        return optimizer
+
     def _write_poslog(self, input_ids, position_ids, completion_mask, seq_mean_lr, seq_n_tok):
         """Gate 5 (per-position bias): one line per sequence of this rank's row with its index in
         row order inside its prompt group (k_row) and in the order the shared path processes it

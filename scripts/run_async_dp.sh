@@ -76,6 +76,8 @@ if [ "$FP8" = "native" ]; then
   ROLLOUT_QUANTIZATION=poor_rl_fp8
   KV_DTYPE=auto
   export RLFORGE_FAST_LOGPROB=1
+  # vLLM AOT validation misses plugin constructor changes such as embedding dtype.
+  export VLLM_DISABLE_COMPILE_CACHE=1
 fi
 # LoRA (PEFT adapter training). LORA=1 freezes the base model, trains an fp32 adapter
 # (PEFT keeps adapters fp32 when the base is bf16) and -- with the server-side flags added
@@ -291,6 +293,10 @@ manifest = {
         "fp8_head_graph": os.environ.get("RLFORGE_FP8_HEAD_GRAPH", "0"),
         "fp8_fuse_mlp": os.environ.get("RLFORGE_FP8_FUSE_MLP", "1"),
         "fp8_align_compile": os.environ.get("RLFORGE_FP8_ALIGN_COMPILE", "0"),
+        "fp8_align_pointwise": os.environ.get("RLFORGE_FP8_ALIGN_POINTWISE", "0"),
+        "fp8_align_backward": os.environ.get("RLFORGE_FP8_ALIGN_BACKWARD", "0"),
+        "vllm_disable_compile_cache": os.environ.get("VLLM_DISABLE_COMPILE_CACHE", "0"),
+        "sb_activation_budget_gib": os.environ.get("RLFORGE_SB_ACT_GB", "80"),
         "no_thinking": "$NO_THINKING" == "1",
         "tracker_backend": "$REPORT_TO", "swanlab_mode": "${SWANLAB_MODE:-disabled}",
         "rollout_dtype": "bfloat16", "rollout_quantization": "$ROLLOUT_QUANTIZATION",
@@ -306,6 +312,8 @@ manifest = {
                "RLFORGE_FP8_GRAPHS=${RLFORGE_FP8_GRAPHS:-0} RLFORGE_FP8_GRAPH_MAX_MB=${RLFORGE_FP8_GRAPH_MAX_MB:-1024} "
                "RLFORGE_FP8_HEAD_GRAPH=${RLFORGE_FP8_HEAD_GRAPH:-0} RLFORGE_FP8_FUSE_MLP=${RLFORGE_FP8_FUSE_MLP:-1} "
                "RLFORGE_FP8_ALIGN_COMPILE=${RLFORGE_FP8_ALIGN_COMPILE:-0} "
+               "RLFORGE_FP8_ALIGN_POINTWISE=${RLFORGE_FP8_ALIGN_POINTWISE:-0} RLFORGE_FP8_ALIGN_BACKWARD=${RLFORGE_FP8_ALIGN_BACKWARD:-0} "
+               "RLFORGE_SB_ACT_GB=${RLFORGE_SB_ACT_GB:-80} "
                "GSPO=$GSPO CPS=$CPS NGEN=$NGEN STALE=$STALE INFLIGHT=$INFLIGHT LR=$LR "
                "MAX_COMPLETION=$MAX_COMPLETION MAX_STEPS=${MAX_STEPS:-0} "
                "bash run_async_dp.sh $MODE $SUFFIX",

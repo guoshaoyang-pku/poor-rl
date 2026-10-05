@@ -1,0 +1,4491 @@
+{
+  "schema": 1,
+  "measurement_date": "2026-10-05",
+  "model": "Qwen3.5-0.8B",
+  "checkpoint": "v3_1e_ckpt100_20261003",
+  "reference": "v3_ckpt175_20261003",
+  "historical_total_RL": {
+    "precision": "FP32 masters/gradients/Adam; BF16 compute with fast-head TF32 backward; BF16 rollout",
+    "trainer_gpus": 4,
+    "rollout_gpus": 4,
+    "G": 32,
+    "global_samples_per_step": 1024,
+    "window": "optimizer steps 4-20",
+    "observations": 17,
+    "completion_token_s": 53690.65646175791,
+    "median_step_s": 35.56861990597099,
+    "median_fwd_bwd_s": 30.62882872670889,
+    "rollout_wait_fraction": 0.0644372475120822,
+    "source": "historical matched control log_history.json"
+  },
+  "current_total_RL": [
+    {
+      "run_name": "bf16_runtime3",
+      "status": "completed",
+      "observations": 17,
+      "completion_token_s": 52057.78337162695,
+      "median_step_s": 37.240987082012,
+      "median_fwd_bwd_s": 34.0756009677425,
+      "rollout_wait_fraction": 0.06508017847977032,
+      "global_samples_per_step_range": [
+        1024.0,
+        1024.0
+      ],
+      "requested_step_window": [
+        4,
+        20
+      ],
+      "rounded_log_fallback": false,
+      "metric_source": "log_history.json",
+      "timing_source_sha256": "4544f6310d4a3bd4036b254b5387b3398c5441d6bb09b7eb0c407b3b468b6bbb",
+      "task_source_sha256": "9aaa443a307be556db95c1b343af11f8da3b7f885b699973b3085ab494d81024",
+      "judge": {
+        "scope": "All scored task records read; independent of optimizer timing window. Scored samples include later drops.",
+        "scored_groups": 724,
+        "scored_samples": 23168,
+        "exact": 7921,
+        "wrong": 15230,
+        "trunc": 2,
+        "selected_groups": 43,
+        "group_luna_outcomes": {
+          "none": 7,
+          "minor": 194,
+          "severe": 44,
+          "timeout": 1,
+          "fail": 10
+        },
+        "valid_parsed_outcomes": 245,
+        "group_outcome_attempts": 256,
+        "group_outcome_failure_fraction": 0.04296875,
+        "median_selected_group_judge_wall_s": 39.4,
+        "pseudo_step_counters": {
+          "records": 21,
+          "duplicate_records_replaced": 0,
+          "range": [
+            0,
+            21
+          ],
+          "reported_calls": 248,
+          "timeouts": 1,
+          "fails": 10,
+          "failure_fraction": 0.04435483870967742,
+          "last_cumulative_calls": 247.0
+        },
+        "malformed_task_records_skipped": 0,
+        "counter_boundary": "Group outcomes and pseudo-step counters are separate; severe subtypes are not added to severe."
+      },
+      "precision": "bf16",
+      "trainer_gpus": 4,
+      "rollout_gpus": 4,
+      "G": 32,
+      "precision_description": "FP32 masters/gradients/Adam; BF16 compute with fast-head TF32 backward; BF16 rollout",
+      "control_boundary": "Same checkpoint, reference, data, reward and hyperparameters; FileStore rendezvous helper replaces original TCP launcher, current code snapshot",
+      "logged_diagnostics": {
+        "first_step": {
+          "step": 1,
+          "loss": 0.0008601804729551077,
+          "grad_norm": 0.3068438172340393,
+          "kl": 0.00046239138100645505,
+          "entropy": 0.6443955823779106,
+          "learning_rate": 0.0,
+          "gspo/log_rho_mean": -0.0004447663377504796,
+          "gspo/abs_log_rho_p50": 0.0006321754335658625,
+          "gspo/abs_log_rho_p90": 0.0015509522054344416,
+          "completions/mean_length": 1826.193715982187,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.10916826035827398,
+          "gspo/seq_clip_low_frac": 0.0,
+          "gspo/seq_clip_high_frac": 0.0
+        },
+        "last_step": {
+          "step": 20,
+          "loss": 0.0009686173871159554,
+          "grad_norm": 0.3191432058811188,
+          "kl": 0.0018894599343184382,
+          "entropy": 0.6646446883678436,
+          "learning_rate": 2e-06,
+          "gspo/log_rho_mean": -0.0020457336358958855,
+          "gspo/abs_log_rho_p50": 0.002063056148472242,
+          "gspo/abs_log_rho_p90": 0.004127584892557934,
+          "completions/mean_length": 2138.831638418079,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.19757713750004768,
+          "gspo/seq_clip_low_frac": 0.1267215230036527,
+          "gspo/seq_clip_high_frac": 0.0
+        }
+      },
+      "gradient_norm_evidence": {
+        "logged_rows": 20,
+        "finite_rows": 20,
+        "boundary": "Finite logged aggregate norm is not a per-parameter gradient or Adam-state dtype assertion."
+      },
+      "mean_trained_completion_tokens_per_step": 2115979.3529411764,
+      "trained_completion_tokens_per_step_range": [
+        1686820.0,
+        2557171.0
+      ],
+      "median_fwd_s": 12.043410100974143
+    },
+    {
+      "run_name": "fp8_pointwise80",
+      "status": "stopped_numerical_regression",
+      "observations": 11,
+      "completion_token_s": 16884.87867003252,
+      "median_step_s": 68.08,
+      "median_fwd_bwd_s": 65.19,
+      "rollout_wait_fraction": 0.02653339701166678,
+      "global_samples_per_step_range": [
+        1024.0,
+        1024.0
+      ],
+      "requested_step_window": [
+        4,
+        20
+      ],
+      "observed_steps": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "complete_window": false,
+      "rounded_log_fallback": true,
+      "metric_source": "trainer.log",
+      "timing_source_sha256": "eb8881b3776f6d9b3d72c24174693d17412a40f5fb91bcd6e9432efa6df06baf",
+      "task_source_sha256": "02ee086e53a94b116f50882bb9c7bde27f0abcd2b7164d826a9c5647391613a6",
+      "judge": {
+        "scope": "All scored task records read; independent of optimizer timing window. Scored samples include later drops.",
+        "scored_groups": 508,
+        "scored_samples": 16256,
+        "exact": 5018,
+        "wrong": 11099,
+        "trunc": 15,
+        "selected_groups": 31,
+        "group_luna_outcomes": {
+          "none": 3,
+          "minor": 137,
+          "severe": 71,
+          "timeout": 0,
+          "fail": 0
+        },
+        "valid_parsed_outcomes": 211,
+        "group_outcome_attempts": 211,
+        "group_outcome_failure_fraction": 0.0,
+        "median_selected_group_judge_wall_s": 25.2,
+        "pseudo_step_counters": {
+          "records": 15,
+          "duplicate_records_replaced": 0,
+          "range": [
+            0,
+            14
+          ],
+          "reported_calls": 201,
+          "timeouts": 0,
+          "fails": 0,
+          "failure_fraction": 0.0,
+          "last_cumulative_calls": 201.0
+        },
+        "malformed_task_records_skipped": 0,
+        "counter_boundary": "Group outcomes and pseudo-step counters are separate; severe subtypes are not added to severe."
+      },
+      "logged_diagnostics": {
+        "first_step": {
+          "step": 1,
+          "loss": 0.003199,
+          "grad_norm": 0.2345,
+          "kl": 0.009735,
+          "entropy": 0.6804,
+          "learning_rate": 0.0,
+          "gspo/log_rho_mean": -0.009436,
+          "gspo/abs_log_rho_p50": 0.009435,
+          "gspo/abs_log_rho_p90": 0.01428,
+          "completions/mean_length": 2018.0,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.1964,
+          "gspo/seq_clip_low_frac": 0.8998,
+          "gspo/seq_clip_high_frac": 0.0
+        },
+        "last_step": {
+          "step": 14,
+          "loss": 0.1082,
+          "grad_norm": 5.069,
+          "kl": 0.3814,
+          "entropy": 0.9341,
+          "learning_rate": 2e-06,
+          "gspo/log_rho_mean": -0.4294,
+          "gspo/abs_log_rho_p50": 0.4352,
+          "gspo/abs_log_rho_p90": 0.5052,
+          "completions/mean_length": 361.6,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.3318,
+          "gspo/seq_clip_low_frac": 0.9988,
+          "gspo/seq_clip_high_frac": 0.0
+        }
+      },
+      "gradient_norm_evidence": {
+        "logged_rows": 14,
+        "finite_rows": 14,
+        "boundary": "Finite logged aggregate norm is not a per-parameter gradient or Adam-state dtype assertion."
+      },
+      "metadata_sha256": "aeed46b068d1aa09fd9bcfcc5fd361cf104d3a77dba1ef24c5151b5e9f9d7625",
+      "numerical_stop_sha256": "fbf88238e362fb89a81266351cd3c8a93215567c7edfbdfcf89b59b09d2d1057",
+      "trainer_exit_code": 143,
+      "stop_note": "Stopped after measured KL/log-ratio/gradient regression; no production-quality claim",
+      "precision": "fp8",
+      "trainer_gpus": 4,
+      "rollout_gpus": 4,
+      "G": 32,
+      "precision_description": "Native FP8 PTPC forward and E5M2/E4M3 backward; FP32 masters, gradients and Adam configured; BF16/FP32 sensitive operations; BF16 KV",
+      "performance_boundary": "Stopped after step14 for numerical regression. Steps4-14 only; rounded raw log, not complete20-step history. Token work shrank as policy regressed.",
+      "no_final_master_checkpoint": true,
+      "mean_trained_completion_tokens_per_step": 1349900.0,
+      "trained_completion_tokens_per_step_range": [
+        613400.0,
+        2187000.0
+      ],
+      "median_fwd_s": 7.866
+    },
+    {
+      "precision": "fp8_runtime_cache_fixed",
+      "run_name": "fp8_runtime_cache80_v2",
+      "status": "stopped_initialization_failure",
+      "completion_token_s": null,
+      "median_step_s": null,
+      "trainer_gpus": 4,
+      "rollout_gpus": 4,
+      "G": 32,
+      "global_samples_per_step": 1024,
+      "scope": "Same inputs, hyperparameters and serving source; only runtime FP8 quantizer and trainer optimizer-hook repairs versus failed pointwise run",
+      "logged_diagnostics": {
+        "first_step": {
+          "step": 1,
+          "loss": 0.2804,
+          "grad_norm": 4.409,
+          "kl": 2.193,
+          "entropy": 9.285,
+          "learning_rate": 0.0,
+          "gspo/log_rho_mean": -2.231,
+          "gspo/abs_log_rho_p50": 2.219,
+          "gspo/abs_log_rho_p90": 2.255,
+          "completions/mean_length": 15270.0,
+          "completions/clipped_ratio": 0.879,
+          "clip_ratio/region_mean": 0.8347,
+          "gspo/seq_clip_low_frac": 1.0,
+          "gspo/seq_clip_high_frac": 0.0
+        },
+        "last_step": {
+          "step": 1,
+          "loss": 0.2804,
+          "grad_norm": 4.409,
+          "kl": 2.193,
+          "entropy": 9.285,
+          "learning_rate": 0.0,
+          "gspo/log_rho_mean": -2.231,
+          "gspo/abs_log_rho_p50": 2.219,
+          "gspo/abs_log_rho_p90": 2.255,
+          "completions/mean_length": 15270.0,
+          "completions/clipped_ratio": 0.879,
+          "clip_ratio/region_mean": 0.8347,
+          "gspo/seq_clip_low_frac": 1.0,
+          "gspo/seq_clip_high_frac": 0.0
+        }
+      },
+      "gradient_norm_evidence": {
+        "logged_rows": 1,
+        "finite_rows": 1,
+        "boundary": "Finite logged aggregate norm is not a per-parameter gradient or Adam-state dtype assertion."
+      },
+      "observations": 0,
+      "requested_step_window": [
+        4,
+        20
+      ],
+      "performance_boundary": "First step before policy update is invalid: KL2.193, entropy9.285, log-ratioP90 2.255, completion truncation87.9%. No primary timing window or performance claim.",
+      "stop_note": "LR0 initialization numerical regression: p90=2.255 KL=2.193 mean completion=15270 clipped=0.879; exclude as valid throughput",
+      "trainer_exit_code": 143,
+      "metadata_sha256": "b178aca80e8bed31f7564ca1708d8024d1d020512c4ba67964f78bbf4e64f572",
+      "numerical_stop_sha256": "b69a1c5227243270a6e8901878bf4c0bef7d0440e0775a541038f916b81a4cbd",
+      "stop_artifact_kind": "initialization_stop.json",
+      "complete_window": false,
+      "metric_source": "trainer.log",
+      "rounded_log_fallback": true,
+      "timing_source_sha256": "4561d922173d0cf9f16717a6fc28f0c366568caa4cc5891fe66528da909baaf4",
+      "task_source_sha256": "dcbee9641acfcfb6cc0fb0dcdbe95d6bdca7d203ebecc424a6e56b8ea04c2a32",
+      "judge": {
+        "scope": "All scored task records read; independent of optimizer timing window. Scored samples include later drops.",
+        "scored_groups": 93,
+        "scored_samples": 2976,
+        "exact": 0,
+        "wrong": 0,
+        "trunc": 2653,
+        "selected_groups": 6,
+        "group_luna_outcomes": {
+          "none": 0,
+          "minor": 0,
+          "severe": 2,
+          "timeout": 0,
+          "fail": 0
+        },
+        "valid_parsed_outcomes": 2,
+        "group_outcome_attempts": 2,
+        "group_outcome_failure_fraction": 0.0,
+        "median_selected_group_judge_wall_s": 0.0,
+        "pseudo_step_counters": {
+          "records": 2,
+          "duplicate_records_replaced": 0,
+          "range": [
+            0,
+            1
+          ],
+          "reported_calls": 1,
+          "timeouts": 0,
+          "fails": 0,
+          "failure_fraction": 0.0,
+          "last_cumulative_calls": 1.0
+        },
+        "malformed_task_records_skipped": 0,
+        "counter_boundary": "Group outcomes and pseudo-step counters are separate; severe subtypes are not added to severe."
+      },
+      "no_final_master_checkpoint": true
+    },
+    {
+      "run_name": "fp8_runtime_cache80_v3",
+      "status": "completed",
+      "trainer_exit_code": 0,
+      "observations": 17,
+      "complete_window": true,
+      "completion_token_s": 52992.47051313678,
+      "median_step_s": 38.33467277698219,
+      "median_fwd_bwd_s": 31.576036692596972,
+      "median_fwd_s": 11.283137753605843,
+      "rollout_wait_fraction": 0.08247216816825233,
+      "mean_trained_completion_tokens_per_step": 1987967.705882353,
+      "trained_completion_tokens_per_step_range": [
+        1624530.0,
+        2276353.0
+      ],
+      "global_samples_per_step_range": [
+        1024.0,
+        1024.0
+      ],
+      "requested_step_window": [
+        4,
+        20
+      ],
+      "observed_steps": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "rounded_log_fallback": false,
+      "metric_source": "log_history.json",
+      "timing_source_sha256": "34a14611911ba841ad86c5d365801e8128cce440517b1e32f0a6b34eb59d71e7",
+      "task_source_sha256": "5d27d55bb98181172b863c0c39fe9602326286e80476a4eed548b8721bd1f2fa",
+      "metadata_sha256": "8e8a8f588d16f7735326ddfbd4b470b6f0c1beb1226c4d53b7e3e1782a5ba5b3",
+      "logged_diagnostics": {
+        "first_step": {
+          "step": 1,
+          "loss": 0.0032022136729210615,
+          "grad_norm": 0.24752329289913177,
+          "kl": 0.009915397386066616,
+          "entropy": 0.697470486164093,
+          "learning_rate": 0.0,
+          "gspo/log_rho_mean": -0.009700478403829038,
+          "gspo/abs_log_rho_p50": 0.009542387211695313,
+          "gspo/abs_log_rho_p90": 0.014416883350349963,
+          "completions/mean_length": 1107.0044642857142,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.2067809421569109,
+          "gspo/seq_clip_low_frac": 0.9217653125524521,
+          "gspo/seq_clip_high_frac": 0.0009765625
+        },
+        "last_step": {
+          "step": 20,
+          "loss": 0.003183178137987852,
+          "grad_norm": 0.2859114110469818,
+          "kl": 0.01013041113037616,
+          "entropy": 0.7354645058512688,
+          "learning_rate": 2e-06,
+          "gspo/log_rho_mean": -0.010035789688117802,
+          "gspo/abs_log_rho_p50": 0.010067927767522633,
+          "gspo/abs_log_rho_p90": 0.014617781504057348,
+          "completions/mean_length": 1879.12368168744,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.24398979917168617,
+          "gspo/seq_clip_low_frac": 0.9270918965339661,
+          "gspo/seq_clip_high_frac": 0.0009765625
+        }
+      },
+      "gradient_norm_evidence": {
+        "logged_rows": 20,
+        "finite_rows": 20,
+        "boundary": "Finite logged aggregate norm is not a per-parameter gradient or Adam-state dtype assertion."
+      },
+      "judge": {
+        "scope": "All scored task records read; independent of optimizer timing window. Scored samples include later drops.",
+        "scored_groups": 748,
+        "scored_samples": 23936,
+        "exact": 8083,
+        "wrong": 15832,
+        "trunc": 2,
+        "selected_groups": 46,
+        "group_luna_outcomes": {
+          "none": 8,
+          "minor": 178,
+          "severe": 38,
+          "timeout": 0,
+          "fail": 9
+        },
+        "valid_parsed_outcomes": 224,
+        "group_outcome_attempts": 233,
+        "group_outcome_failure_fraction": 0.03862660944206009,
+        "median_selected_group_judge_wall_s": 48.900000000000006,
+        "pseudo_step_counters": {
+          "records": 23,
+          "duplicate_records_replaced": 0,
+          "range": [
+            0,
+            22
+          ],
+          "reported_calls": 233,
+          "timeouts": 0,
+          "fails": 9,
+          "failure_fraction": 0.03862660944206009,
+          "last_cumulative_calls": 222.0
+        },
+        "malformed_task_records_skipped": 0,
+        "counter_boundary": "Group outcomes and pseudo-step counters are separate; severe subtypes are not added to severe."
+      },
+      "precision": "fp8_runtime_cache_fixed_fresh_AOT",
+      "trainer_gpus": 4,
+      "rollout_gpus": 4,
+      "G": 32,
+      "precision_description": "FP32 masters/grads and Adam configured; native FP8 forward/E5M2-E4M3 backward, BF16/FP32 sensitive operations, BF16 KV",
+      "performance_boundary": "Same input and hyperparameter contract; valid20-step total completion throughput. No train/decode equality or long-run quality claim.",
+      "saved_master_evidence": {
+        "run_name": "fp8_runtime_cache80_v3",
+        "trainer_exit_code": 0,
+        "stop_reason": "completed",
+        "final_tensor_file_count": 1,
+        "dtype_counts": {
+          "F32": 320
+        },
+        "all_saved_tensors_F32": true,
+        "selected_master_update_evidence": {
+          "tensor_identifier": "model.language_model.layers.23.mlp.down_proj.weight",
+          "shape": [
+            1024,
+            3584
+          ],
+          "dtype": "F32",
+          "initial_tensor_sha256": "bba3d70380f3ecc1dc86f0e3062009a9d2ffa920bf754fe06c6a4f8b1eca0808",
+          "final_tensor_sha256": "1c1ed895aca8305544da83cc53d3a99e5c3f1d83fe4ff8852f1388e9255c04bf",
+          "changed": true
+        },
+        "metadata_sha256": "8e8a8f588d16f7735326ddfbd4b470b6f0c1beb1226c4d53b7e3e1782a5ba5b3",
+        "history_sha256": "34a14611911ba841ad86c5d365801e8128cce440517b1e32f0a6b34eb59d71e7",
+        "optimizer_dtype_verified_in_E2E": false,
+        "optimizer_precision_note": "FP32 Adam configured; saved model headers prove master dtype only. Microbenchmark state assertions separate."
+      }
+    },
+    {
+      "run_name": "fp8_compact128_v1",
+      "status": "completed",
+      "trainer_exit_code": 0,
+      "observations": 17,
+      "complete_window": true,
+      "completion_token_s": 58362.62492418483,
+      "median_step_s": 32.34063449781388,
+      "median_fwd_bwd_s": 26.462287227623165,
+      "median_fwd_s": 10.652463292703032,
+      "rollout_wait_fraction": 0.05845603727217619,
+      "mean_trained_completion_tokens_per_step": 1934809.8823529412,
+      "trained_completion_tokens_per_step_range": [
+        1711307.0,
+        2258071.0
+      ],
+      "global_samples_per_step_range": [
+        1024.0,
+        1024.0
+      ],
+      "requested_step_window": [
+        4,
+        20
+      ],
+      "observed_steps": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "rounded_log_fallback": false,
+      "metric_source": "log_history.json",
+      "timing_source_sha256": "607a647ca540883568489e80ac0de6d0309a0ac64c9daf1b95a732f3359ab77e",
+      "task_source_sha256": "2838ffca23bdfe7bd0386bdfce9f0ef9bc6d490b208aa9d390afcb6431f06677",
+      "metadata_sha256": "2dc903e4334e1d22eee317451b4f499ec8588ff91e943f7488673da46f5dc217",
+      "logged_diagnostics": {
+        "first_step": {
+          "step": 1,
+          "loss": 0.003027750877663493,
+          "grad_norm": 0.22438621520996094,
+          "kl": 0.009768589632585645,
+          "entropy": 0.6810898333787918,
+          "learning_rate": 0.0,
+          "gspo/log_rho_mean": -0.009573294664733112,
+          "gspo/abs_log_rho_p50": 0.009551967144943774,
+          "gspo/abs_log_rho_p90": 0.014418063685297966,
+          "completions/mean_length": 937.2706422018349,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.16771600022912025,
+          "gspo/seq_clip_low_frac": 0.9135201275348663,
+          "gspo/seq_clip_high_frac": 0.0009765625
+        },
+        "last_step": {
+          "step": 20,
+          "loss": 0.003272589296102524,
+          "grad_norm": 0.3248879015445709,
+          "kl": 0.01060066046193242,
+          "entropy": 0.7508386969566345,
+          "learning_rate": 2e-06,
+          "gspo/log_rho_mean": -0.01044787687715143,
+          "gspo/abs_log_rho_p50": 0.01047595008276403,
+          "gspo/abs_log_rho_p90": 0.015036613098345697,
+          "completions/mean_length": 1486.6030150753768,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.26387655548751354,
+          "gspo/seq_clip_low_frac": 0.9579799175262451,
+          "gspo/seq_clip_high_frac": 0.0
+        }
+      },
+      "gradient_norm_evidence": {
+        "logged_rows": 20,
+        "finite_rows": 20,
+        "boundary": "Finite logged aggregate norm is not a per-parameter gradient or Adam-state dtype assertion."
+      },
+      "judge": {
+        "scope": "All scored task records read; independent of optimizer timing window. Scored samples include later drops.",
+        "scored_groups": 761,
+        "scored_samples": 24352,
+        "exact": 8369,
+        "wrong": 15956,
+        "trunc": 4,
+        "selected_groups": 46,
+        "group_luna_outcomes": {
+          "none": 6,
+          "minor": 167,
+          "severe": 23,
+          "timeout": 3,
+          "fail": 16
+        },
+        "valid_parsed_outcomes": 196,
+        "group_outcome_attempts": 215,
+        "group_outcome_failure_fraction": 0.08837209302325581,
+        "median_selected_group_judge_wall_s": 45.3,
+        "pseudo_step_counters": {
+          "records": 23,
+          "duplicate_records_replaced": 0,
+          "range": [
+            0,
+            22
+          ],
+          "reported_calls": 215,
+          "timeouts": 3,
+          "fails": 16,
+          "failure_fraction": 0.08837209302325581,
+          "last_cumulative_calls": 196.0
+        },
+        "malformed_task_records_skipped": 0,
+        "counter_boundary": "Group outcomes and pseudo-step counters are separate; severe subtypes are not added to severe."
+      },
+      "precision": "fp8_compact_backward_ACT128",
+      "trainer_gpus": 4,
+      "rollout_gpus": 4,
+      "G": 32,
+      "precision_description": "FP32 masters/grads and Adam configured; native FP8 forward/E5M2-E4M3 backward, BF16/FP32 sensitive operations, BF16 KV",
+      "performance_boundary": "Same initial/reference/data, hyperparameters and judge. Compact backward and activation budget change together. Only a complete steps4-20 window is published as total throughput; no train/decode equality or long-run quality claim.",
+      "saved_master_evidence": {
+        "run_name": "fp8_compact128_v1",
+        "trainer_exit_code": 0,
+        "stop_reason": "completed",
+        "final_tensor_file_count": 1,
+        "dtype_counts": {
+          "F32": 320
+        },
+        "all_saved_tensors_F32": true,
+        "selected_master_update_evidence": {
+          "tensor_identifier": "model.language_model.layers.23.mlp.down_proj.weight",
+          "shape": [
+            1024,
+            3584
+          ],
+          "dtype": "F32",
+          "initial_tensor_sha256": "bba3d70380f3ecc1dc86f0e3062009a9d2ffa920bf754fe06c6a4f8b1eca0808",
+          "final_tensor_sha256": "82dd2278b8c7665173147633278adfa78846e7c8beec70e9e2486f52844c19b9",
+          "changed": true
+        },
+        "metadata_sha256": "2dc903e4334e1d22eee317451b4f499ec8588ff91e943f7488673da46f5dc217",
+        "history_sha256": "607a647ca540883568489e80ac0de6d0309a0ac64c9daf1b95a732f3359ab77e",
+        "optimizer_dtype_verified_in_E2E": false,
+        "optimizer_precision_note": "FP32 Adam configured; saved model headers prove master dtype only. Microbenchmark state assertions separate."
+      },
+      "completed_artifact_hashes": {
+        "run.json": "2dc903e4334e1d22eee317451b4f499ec8588ff91e943f7488673da46f5dc217",
+        "trainer.log": "7b7897172f6c474ddf93d46f932fcb4e216b421193fb86548d964b160aad8285",
+        "task_split.jsonl": "2838ffca23bdfe7bd0386bdfce9f0ef9bc6d490b208aa9d390afcb6431f06677",
+        "log_history.json": "607a647ca540883568489e80ac0de6d0309a0ac64c9daf1b95a732f3359ab77e",
+        "vllm.log": "45af6b53bc255d9ebe2fcc3789855ab628c2da62d10550c17c66a88d5f6aefd7"
+      },
+      "completed_artifact_local_remote_all_match": true
+    },
+    {
+      "run_name": "fp8_compact128_v2",
+      "status": "completed",
+      "trainer_exit_code": 0,
+      "observations": 17,
+      "complete_window": true,
+      "completion_token_s": 57103.14740682555,
+      "median_step_s": 33.821666836738586,
+      "median_fwd_bwd_s": 26.098762263543904,
+      "median_fwd_s": 10.701820373535156,
+      "rollout_wait_fraction": 0.05238570762843557,
+      "mean_trained_completion_tokens_per_step": 1929407.9411764706,
+      "trained_completion_tokens_per_step_range": [
+        1472503.0,
+        2375897.0
+      ],
+      "global_samples_per_step_range": [
+        1024.0,
+        1024.0
+      ],
+      "requested_step_window": [
+        4,
+        20
+      ],
+      "observed_steps": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "rounded_log_fallback": false,
+      "metric_source": "log_history.json",
+      "timing_source_sha256": "e6a931390bf96cf30fd4363198b424c8a3a39f4185e303553d975c2c42714d94",
+      "task_source_sha256": "9e079d30cba1bac51ca339d7015f4ef78a77f462025535541aea19c47906fb1d",
+      "metadata_sha256": "a7c6e5167ff83e81d18eba2acd0c34895b945ee23b0b5f8e6cfac3f8c30eaec6",
+      "logged_diagnostics": {
+        "first_step": {
+          "step": 1,
+          "loss": 0.0032076984643936157,
+          "grad_norm": 0.2364272028207779,
+          "kl": 0.009681632393039763,
+          "entropy": 0.6790576130151749,
+          "learning_rate": 0.0,
+          "gspo/log_rho_mean": -0.009503396227955818,
+          "gspo/abs_log_rho_p50": 0.009541357983835042,
+          "gspo/abs_log_rho_p90": 0.014327095355838537,
+          "completions/mean_length": 2022.9324849770237,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.20505952835083008,
+          "gspo/seq_clip_low_frac": 0.8980004787445068,
+          "gspo/seq_clip_high_frac": 0.0009765625
+        },
+        "last_step": {
+          "step": 20,
+          "loss": 0.003471893258392811,
+          "grad_norm": 0.3150585889816284,
+          "kl": 0.010421782615594566,
+          "entropy": 0.7328132316470146,
+          "learning_rate": 2e-06,
+          "gspo/log_rho_mean": -0.010245564859360456,
+          "gspo/abs_log_rho_p50": 0.010180987301282585,
+          "gspo/abs_log_rho_p90": 0.014517969801090658,
+          "completions/mean_length": 1758.862083161795,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.27150673046708107,
+          "gspo/seq_clip_low_frac": 0.9561647102236748,
+          "gspo/seq_clip_high_frac": 0.0008445946150459349
+        }
+      },
+      "gradient_norm_evidence": {
+        "logged_rows": 20,
+        "finite_rows": 20,
+        "boundary": "Finite logged aggregate norm is not a per-parameter gradient or Adam-state dtype assertion."
+      },
+      "judge": {
+        "scope": "All scored task records read; independent of optimizer timing window. Scored samples include later drops.",
+        "scored_groups": 769,
+        "scored_samples": 24608,
+        "exact": 8491,
+        "wrong": 16097,
+        "trunc": 0,
+        "selected_groups": 46,
+        "group_luna_outcomes": {
+          "none": 0,
+          "minor": 68,
+          "severe": 24,
+          "timeout": 0,
+          "fail": 110
+        },
+        "valid_parsed_outcomes": 92,
+        "group_outcome_attempts": 202,
+        "group_outcome_failure_fraction": 0.5445544554455446,
+        "median_selected_group_judge_wall_s": 40.25,
+        "pseudo_step_counters": {
+          "records": 22,
+          "duplicate_records_replaced": 0,
+          "range": [
+            0,
+            22
+          ],
+          "reported_calls": 197,
+          "timeouts": 0,
+          "fails": 110,
+          "failure_fraction": 0.5583756345177665,
+          "last_cumulative_calls": 98.0
+        },
+        "malformed_task_records_skipped": 0,
+        "counter_boundary": "Group outcomes and pseudo-step counters are separate; severe subtypes are not added to severe."
+      },
+      "total_trained_completion_tokens": 32799935.0,
+      "total_step_s": 574.3980233930051,
+      "throughput_formula": "sum(batch/trained_tokens_per_step) / sum(perf/step_s)",
+      "precision": "fp8_compact128_detached_views",
+      "precision_description": "FP32 masters/grads and Adam configured; native FP8 forward/E5M2-E4M3 backward, BF16/FP32 sensitive operations, BF16 KV",
+      "trainer_gpus": 4,
+      "rollout_gpus": 4,
+      "G": 32,
+      "performance_boundary": "Samev1 initial checkpoint, reference, data, hyperparameters and tuning. Only alignment detach view source changes. Realized external judge failure54.46% versusv1 8.84% differs materially. Report observed completed system throughput; no clean reward-service-matched causal comparison, statistical significance, strict train/decode equality or long-run learning-quality claim.",
+      "saved_master_evidence": {
+        "run_name": "fp8_compact128_v2",
+        "trainer_exit_code": 0,
+        "stop_reason": "completed",
+        "final_tensor_file_count": 1,
+        "dtype_counts": {
+          "F32": 320
+        },
+        "all_saved_tensors_F32": true,
+        "selected_master_update_evidence": {
+          "tensor_identifier": "model.language_model.layers.23.mlp.down_proj.weight",
+          "shape": [
+            1024,
+            3584
+          ],
+          "dtype": "F32",
+          "initial_tensor_sha256": "bba3d70380f3ecc1dc86f0e3062009a9d2ffa920bf754fe06c6a4f8b1eca0808",
+          "final_tensor_sha256": "349e21e043752b54ec2c12fac283c75cb5597ee8bc562c48cb5d7a01fa7673a8",
+          "changed": true
+        },
+        "metadata_sha256": "a7c6e5167ff83e81d18eba2acd0c34895b945ee23b0b5f8e6cfac3f8c30eaec6",
+        "history_sha256": "e6a931390bf96cf30fd4363198b424c8a3a39f4185e303553d975c2c42714d94",
+        "optimizer_dtype_verified_in_E2E": false,
+        "optimizer_precision_note": "FP32 Adam configured; saved model headers prove master dtype only. Microbenchmark state assertions separate."
+      },
+      "completed_artifact_hashes": {
+        "run.json": "a7c6e5167ff83e81d18eba2acd0c34895b945ee23b0b5f8e6cfac3f8c30eaec6",
+        "trainer.log": "b9de35ef586574483bf4193ab09630b07735c012250333a27e8155f397b8577a",
+        "task_split.jsonl": "9e079d30cba1bac51ca339d7015f4ef78a77f462025535541aea19c47906fb1d",
+        "log_history.json": "e6a931390bf96cf30fd4363198b424c8a3a39f4185e303553d975c2c42714d94",
+        "vllm.log": "901872d194e4a9ee420bf412986a669f15c730b76cb6f9c670f971af2499bc4b"
+      },
+      "completed_artifact_local_remote_all_match": true,
+      "compiler_runtime_boundary": {
+        "schema": "poor-rl-compact-v2-real-shape-boundary-v1",
+        "created_utc": "2026-10-05T05:04:20.390039+00:00",
+        "run_name": "fp8_compact128_v2",
+        "source_sha256": "f613be41e4b9411b4c586b89de85c524aa970088c12beb79148ddbeaecb57b34",
+        "trainer_log_sha256": "b9de35ef586574483bf4193ab09630b07735c012250333a27e8155f397b8577a",
+        "compiler_limit_events": [
+          {
+            "rank": 1,
+            "function": "_rms_backward",
+            "limit": 8,
+            "reason": "x.stride()[0] == x.size()[1] guard failed"
+          },
+          {
+            "rank": 2,
+            "function": "_rms_backward",
+            "limit": 8,
+            "reason": "x.stride()[0] == x.size()[1] guard failed"
+          },
+          {
+            "rank": 3,
+            "function": "_rms_backward",
+            "limit": 8,
+            "reason": "x.stride()[0] == x.size()[1] guard failed"
+          },
+          {
+            "rank": 0,
+            "function": "_rms_backward",
+            "limit": 8,
+            "reason": "tensor x row stride mismatch at index0: expected256, actual512"
+          }
+        ],
+        "compiled_backward_eliminated_all_recompiles": false,
+        "interpretation": "Detach fixes original base-shape alias guards tested on contiguous CPU shapes; actual E2E varied activation strides still reached Dynamo recompile_limit on all four trainer ranks and fell back. No claim that E2E backward remains fully compiled.",
+        "judge_boundary": {
+          "valid_parsed_outcomes": 92,
+          "group_outcome_attempts": 202,
+          "fail": 110,
+          "timeout": 0,
+          "failure_fraction": 0.5445544554455446,
+          "scope": "All scored task records read; independent of optimizer timing window. Scored samples include later drops.",
+          "comparison": "Configuration was the same asv1, realized judge failure fraction54.46% versus8.84% differs materially. Report this completed throughput as observed system performance, not a clean reward-service-matched causal comparison or validated learning-quality result."
+        }
+      }
+    },
+    {
+      "run_name": "fp8_compact128_v3",
+      "status": "completed",
+      "trainer_exit_code": 0,
+      "observations": 17,
+      "complete_window": true,
+      "completion_token_s": 61267.77598138246,
+      "median_step_s": 32.228764079511166,
+      "median_fwd_bwd_s": 26.04148960672319,
+      "median_fwd_s": 11.231615404598415,
+      "rollout_wait_fraction": 0.040528156750343845,
+      "mean_trained_completion_tokens_per_step": 1969667.705882353,
+      "trained_completion_tokens_per_step_range": [
+        1620970.0,
+        2461936.0
+      ],
+      "global_samples_per_step_range": [
+        1024.0,
+        1024.0
+      ],
+      "requested_step_window": [
+        4,
+        20
+      ],
+      "observed_steps": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "rounded_log_fallback": false,
+      "metric_source": "log_history.json",
+      "timing_source_sha256": "4a0f102b7c5df3556211e628d89d6f6422d5a5465959365f558e1307491ef9e1",
+      "task_source_sha256": "9555d28cf3d335a51dcb4bf001c52cb6f5b84ddbef952db05cba171a5fe611a1",
+      "metadata_sha256": "14fe45111fa5bf6e38bb9ccd27b0240bf46ba0e4ce16c05ceade43d162e22d00",
+      "logged_diagnostics": {
+        "first_step": {
+          "step": 1,
+          "loss": 0.0033230273984372616,
+          "grad_norm": 0.2390850931406021,
+          "kl": 0.009826545719988644,
+          "entropy": 0.6913260817527771,
+          "learning_rate": 0.0,
+          "gspo/log_rho_mean": -0.009863570681773126,
+          "gspo/abs_log_rho_p50": 0.009955939720384777,
+          "gspo/abs_log_rho_p90": 0.014003568096086383,
+          "completions/mean_length": 1998.0200296735904,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.2041014088317752,
+          "gspo/seq_clip_low_frac": 0.9411211237311363,
+          "gspo/seq_clip_high_frac": 0.0009765625
+        },
+        "last_step": {
+          "step": 20,
+          "loss": 0.003662357572466135,
+          "grad_norm": 0.3169601857662201,
+          "kl": 0.01069039513822645,
+          "entropy": 0.7589192017912865,
+          "learning_rate": 2e-06,
+          "gspo/log_rho_mean": -0.010707772336900234,
+          "gspo/abs_log_rho_p50": 0.010630590724758804,
+          "gspo/abs_log_rho_p90": 0.015503623289987445,
+          "completions/mean_length": 1824.5670945157526,
+          "completions/clipped_ratio": 0.0,
+          "clip_ratio/region_mean": 0.254052996635437,
+          "gspo/seq_clip_low_frac": 0.9521349593997002,
+          "gspo/seq_clip_high_frac": 0.0
+        }
+      },
+      "gradient_norm_evidence": {
+        "logged_rows": 20,
+        "finite_rows": 20,
+        "boundary": "Finite logged aggregate norm is not a per-parameter gradient or Adam-state dtype assertion."
+      },
+      "judge": {
+        "scope": "All scored task records read; independent of optimizer timing window. Scored samples include later drops.",
+        "scored_groups": 744,
+        "scored_samples": 23808,
+        "exact": 8119,
+        "wrong": 15663,
+        "trunc": 2,
+        "selected_groups": 44,
+        "group_luna_outcomes": {
+          "none": 7,
+          "minor": 159,
+          "severe": 30,
+          "timeout": 3,
+          "fail": 5
+        },
+        "valid_parsed_outcomes": 196,
+        "group_outcome_attempts": 204,
+        "group_outcome_failure_fraction": 0.0392156862745098,
+        "median_selected_group_judge_wall_s": 55.900000000000006,
+        "pseudo_step_counters": {
+          "records": 22,
+          "duplicate_records_replaced": 0,
+          "range": [
+            0,
+            21
+          ],
+          "reported_calls": 204,
+          "timeouts": 3,
+          "fails": 5,
+          "failure_fraction": 0.0392156862745098,
+          "last_cumulative_calls": 189.0
+        },
+        "malformed_task_records_skipped": 0,
+        "counter_boundary": "Group outcomes and pseudo-step counters are separate; severe subtypes are not added to severe."
+      },
+      "total_trained_completion_tokens": 33484351.0,
+      "total_step_s": 546.5246691862121,
+      "throughput_formula": "sum(batch/trained_tokens_per_step) / sum(perf/step_s)",
+      "precision": "fp8_compact128_contiguous_backward_views",
+      "precision_description": "FP32 masters/grads and Adam configured; native FP8 forward/E5M2-E4M3 backward, BF16/FP32 sensitive operations, BF16 KV",
+      "trainer_gpus": 4,
+      "rollout_gpus": 4,
+      "G": 32,
+      "performance_boundary": "Same prior configured input and hyperparameters; only thirteen contiguous backward view calls changed fromv2. One20-step run per arm, generated completions and judge outcomes differ. Report completed observed throughput; no statistical significance, strict train/decode equality or long-run learning-quality claim.",
+      "saved_master_evidence": {
+        "run_name": "fp8_compact128_v3",
+        "trainer_exit_code": 0,
+        "stop_reason": "completed",
+        "final_tensor_file_count": 1,
+        "dtype_counts": {
+          "F32": 320
+        },
+        "all_saved_tensors_F32": true,
+        "selected_master_update_evidence": {
+          "tensor_identifier": "model.language_model.layers.23.mlp.down_proj.weight",
+          "shape": [
+            1024,
+            3584
+          ],
+          "dtype": "F32",
+          "initial_tensor_sha256": "bba3d70380f3ecc1dc86f0e3062009a9d2ffa920bf754fe06c6a4f8b1eca0808",
+          "final_tensor_sha256": "5d149b1e9337a7772620f68ad17649d6db66db0e2d9ef997576079502ee2e455",
+          "changed": true
+        },
+        "metadata_sha256": "14fe45111fa5bf6e38bb9ccd27b0240bf46ba0e4ce16c05ceade43d162e22d00",
+        "history_sha256": "4a0f102b7c5df3556211e628d89d6f6422d5a5465959365f558e1307491ef9e1",
+        "optimizer_dtype_verified_in_E2E": false,
+        "optimizer_precision_note": "FP32 Adam configured; saved model headers prove master dtype only. Microbenchmark state assertions separate."
+      },
+      "completed_artifact_hashes": {
+        "run.json": "14fe45111fa5bf6e38bb9ccd27b0240bf46ba0e4ce16c05ceade43d162e22d00",
+        "trainer.log": "ec72383bfd7606bb5061d30268a50e3212066631d92ae3d6e6154a455882b61a",
+        "task_split.jsonl": "9555d28cf3d335a51dcb4bf001c52cb6f5b84ddbef952db05cba171a5fe611a1",
+        "log_history.json": "4a0f102b7c5df3556211e628d89d6f6422d5a5465959365f558e1307491ef9e1",
+        "vllm.log": "f8b7bf60168fa6bd88c2ef545e134a083fa174b1adc2efb2540cbeda76c6e14a"
+      },
+      "completed_artifact_local_remote_all_match": true,
+      "compiler_runtime_evidence": {
+        "created_utc": "2026-10-05T05:23:35.719545+00:00",
+        "run_name": "fp8_compact128_v3",
+        "trainer_exit_code": 0,
+        "stop_reason": "completed",
+        "trainer_log_sha256": "ec72383bfd7606bb5061d30268a50e3212066631d92ae3d6e6154a455882b61a",
+        "server_log_sha256": "f8b7bf60168fa6bd88c2ef545e134a083fa174b1adc2efb2540cbeda76c6e14a",
+        "compiler_recompile_limit_messages": 0,
+        "stride_mismatch_messages": 0,
+        "base_shape_guard_messages": 0,
+        "traceback_count": 0,
+        "CUDA_error_count": 0,
+        "safe_judge_exception_types": {
+          "InternalServerError": 5,
+          "APITimeoutError": 3
+        },
+        "source_snapshot_file_count": 32,
+        "all_source_snapshot_hashes_match_manifest": true,
+        "core_source_sha256": {
+          "rlforge.fast_logprob": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f",
+          "rlforge.fp8": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+          "rlforge.fp8_alignment": "736108537b40ebb3ebbea16d9195a7078f23d92cd01237ce42d01a28b32e5d75",
+          "rlforge.fp8_serving": "b15ccea1083f5913b423004df219f668337463c314cadc9f94e4c789c25704c0",
+          "rlforge.trainer": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb"
+        },
+        "cache_disabled_log_messages": 1,
+        "AOT_direct_load_messages": 0,
+        "CUDA_graph_log_messages": 803,
+        "boundary": "Completed trainer/server log keyword evidence. Zero Dynamo recompile-limit messages means no observed limit fallback in this run, not proof of complete kernel coverage or zero individual recompiles. Judge logs retain exception type only; HTTP status and upstream cause were not saved."
+      },
+      "weight_sync_timing_evidence": {
+        "scope": "Exact optimizer steps4-20 from saved numeric history,17 observations",
+        "history_sha256": "4a0f102b7c5df3556211e628d89d6f6422d5a5465959365f558e1307491ef9e1",
+        "total_step_s": 546.5246691862121,
+        "timing_sums_s": {
+          "perf/weight_sync_s": 51.167924642562866,
+          "perf/weight_sync_pause_s": 48.69503688812256,
+          "perf/weight_sync_barrier_s": 0.008225202560424805,
+          "perf/weight_sync_transfer_s": 2.369278907775879
+        },
+        "fractions_of_summed_step_time": {
+          "perf/weight_sync_s": 0.09362418117146128,
+          "perf/weight_sync_pause_s": 0.08909943070022913,
+          "perf/weight_sync_barrier_s": 1.5050011507572606e-05,
+          "perf/weight_sync_transfer_s": 0.004335172850118166
+        },
+        "boundary": "Total sync and subphases are separate logged timing fields; do not add total to subphases. Pause includes drain/pause work, transfer is separately logged. This is timing evidence, not MFU."
+      }
+    }
+  ],
+  "inputs_sha256": {
+    "policy_model.safetensors": "4c8d1c2b5338650b5033518ea8485d4233fadca58250ed1ea5a16e12171392c9",
+    "reference_model.safetensors": "d89e5211c4e03a0c7ec5e98a8af312db186fc0aaf0eb3190e016819bef373018",
+    "train_think.jsonl": "3a909dddfc30b5aaac287f87f55796a0f97f577d41b907885e733844780223f2",
+    "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+    "tokenizer_config.json": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87",
+    "chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+    "generation_config.json": "afa48c3c3f7a3e873e82b5e77af288143c5b400d5df39ae4405e40e8e92d9fcb"
+  },
+  "reward_sha256": "48cde570dd3c4e389b92088ee787c01ef345ecdc8d851c65f606da1048999e66",
+  "serving": {
+    "scope": "one H200 per precision, TP1, server-counter steady window; serving only; no trainer/judge",
+    "protocol": {
+      "G": 32,
+      "max_tokens": 2048,
+      "ignore_eos": true,
+      "warmup_s": 40,
+      "requested_window_s": 60,
+      "concurrency": [
+        256,
+        512
+      ],
+      "gpu_memory_utilization": 0.8,
+      "temperature": 1.0,
+      "top_p": 1.0,
+      "return_token_ids": true,
+      "logprobs": 0
+    },
+    "rows": [
+      {
+        "tag": "bf16",
+        "conc": 256,
+        "max_tokens": 2048,
+        "gen_tok_s": 16407.5,
+        "prompt_tok_s": 31047.8,
+        "window_s": 61.2,
+        "running": 254.3,
+        "waiting": 0.0,
+        "kv_usage": 0.092,
+        "preempt": 0.0,
+        "prefix_hit": 0.907,
+        "successful_requests": 795,
+        "failed_requests": 0
+      },
+      {
+        "tag": "bf16",
+        "conc": 512,
+        "max_tokens": 2048,
+        "gen_tok_s": 16303.1,
+        "prompt_tok_s": 29091.6,
+        "window_s": 61.8,
+        "running": 496.3,
+        "waiting": 0.0,
+        "kv_usage": 0.178,
+        "preempt": 0.0,
+        "prefix_hit": 0.922,
+        "successful_requests": 811,
+        "failed_requests": 0
+      },
+      {
+        "tag": "fp8",
+        "conc": 256,
+        "max_tokens": 2048,
+        "gen_tok_s": 15881.0,
+        "prompt_tok_s": 29350.4,
+        "window_s": 61.3,
+        "running": 253.7,
+        "waiting": 0.0,
+        "kv_usage": 0.091,
+        "preempt": 0.0,
+        "prefix_hit": 0.905,
+        "successful_requests": 768,
+        "failed_requests": 0
+      },
+      {
+        "tag": "fp8",
+        "conc": 512,
+        "max_tokens": 2048,
+        "gen_tok_s": 16038.2,
+        "prompt_tok_s": 28679.1,
+        "window_s": 61.1,
+        "running": 502.3,
+        "waiting": 0.0,
+        "kv_usage": 0.181,
+        "preempt": 0.0,
+        "prefix_hit": 0.916,
+        "successful_requests": 806,
+        "failed_requests": 0
+      }
+    ]
+  },
+  "trainer": {
+    "scope": "one H200 actual GSPO loss/backward plus frozen BF16 KL-reference forward; FP32 Adam states preallocated with lr0; optimizer update/DDP/rollout/judge/sync excluded",
+    "provenance": "First32/64 unique historical completion texts of1600-2300 tokens replayed on fixed2623-token prompt; original prompt/qid absent; shape/performance evidence only, not original prompt-completion pairs",
+    "tokens_sha256": {
+      "G32": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+      "G64": "daca9e02ff17a1567b368e2668732db25cdc77808dab2232c5402789beaace17"
+    },
+    "G64_changes_algorithm_group": true,
+    "rows": [
+      {
+        "precision": "bf16",
+        "G": 32,
+        "subbatch_config": "131072:auto",
+        "checkpoint_layers": [
+          15
+        ],
+        "padded_tokens": [
+          65053
+        ],
+        "subbatches": 1,
+        "completion_tokens": 58248,
+        "median_ms": 2925.0696655362844,
+        "completion_token_s": 19913.371871545074,
+        "peak_gib": 86.32885360717773,
+        "oom": false,
+        "timed_repeats": 3,
+        "loss_vs_first": 0.0,
+        "logprob_bitexact": true
+      },
+      {
+        "precision": "bf16",
+        "G": 32,
+        "subbatch_config": "131072:none",
+        "checkpoint_layers": [
+          0
+        ],
+        "padded_tokens": [
+          65053
+        ],
+        "subbatches": 1,
+        "completion_tokens": 58248,
+        "median_ms": null,
+        "completion_token_s": null,
+        "peak_gib": null,
+        "oom": true,
+        "timed_repeats": 0,
+        "loss_vs_first": null,
+        "logprob_bitexact": false
+      },
+      {
+        "precision": "bf16",
+        "G": 32,
+        "subbatch_config": "131072:all",
+        "checkpoint_layers": [
+          24
+        ],
+        "padded_tokens": [
+          65053
+        ],
+        "subbatches": 1,
+        "completion_tokens": 58248,
+        "median_ms": 3118.975122459233,
+        "completion_token_s": 18675.365372607695,
+        "peak_gib": 32.05217885971069,
+        "oom": false,
+        "timed_repeats": 3,
+        "loss_vs_first": 0.0,
+        "logprob_bitexact": true
+      },
+      {
+        "precision": "bf16",
+        "G": 64,
+        "subbatch_config": "65536:auto",
+        "checkpoint_layers": [
+          14,
+          13,
+          1
+        ],
+        "padded_tokens": [
+          57130,
+          53572,
+          27340
+        ],
+        "subbatches": 3,
+        "completion_tokens": 122158,
+        "median_ms": 5949.044413864613,
+        "completion_token_s": 20534.054127298714,
+        "peak_gib": 91.64632844924927,
+        "oom": false,
+        "timed_repeats": 2,
+        "loss_vs_first": 0.0,
+        "logprob_bitexact": true
+      },
+      {
+        "precision": "bf16",
+        "G": 64,
+        "subbatch_config": "131072:auto",
+        "checkpoint_layers": [
+          19,
+          1
+        ],
+        "padded_tokens": [
+          108142,
+          27340
+        ],
+        "subbatches": 2,
+        "completion_tokens": 122158,
+        "median_ms": 6064.696583431214,
+        "completion_token_s": 20142.475113056167,
+        "peak_gib": 93.04890298843384,
+        "oom": false,
+        "timed_repeats": 2,
+        "loss_vs_first": -1.4901161193847656e-08,
+        "logprob_bitexact": true
+      },
+      {
+        "precision": "bf16",
+        "G": 64,
+        "subbatch_config": "262144:auto",
+        "checkpoint_layers": [
+          20
+        ],
+        "padded_tokens": [
+          132922
+        ],
+        "subbatches": 1,
+        "completion_tokens": 122158,
+        "median_ms": 6160.952208563685,
+        "completion_token_s": 19827.77919137258,
+        "peak_gib": 88.74078607559204,
+        "oom": false,
+        "timed_repeats": 2,
+        "loss_vs_first": -1.4901161193847656e-08,
+        "logprob_bitexact": true
+      },
+      {
+        "precision": "fp8",
+        "G": 32,
+        "subbatch_config": "131072:auto",
+        "checkpoint_layers": [
+          15
+        ],
+        "padded_tokens": [
+          65053
+        ],
+        "subbatches": 1,
+        "completion_tokens": 58248,
+        "median_ms": 2923.2756681740284,
+        "completion_token_s": 19925.592592635498,
+        "peak_gib": 97.44930267333984,
+        "oom": false,
+        "timed_repeats": 3,
+        "loss_vs_first": 0.0,
+        "logprob_bitexact": true
+      },
+      {
+        "precision": "fp8",
+        "G": 32,
+        "subbatch_config": "131072:none",
+        "checkpoint_layers": [
+          0
+        ],
+        "padded_tokens": [
+          65053
+        ],
+        "subbatches": 1,
+        "completion_tokens": 58248,
+        "median_ms": null,
+        "completion_token_s": null,
+        "peak_gib": null,
+        "oom": true,
+        "timed_repeats": 0,
+        "loss_vs_first": null,
+        "logprob_bitexact": false
+      },
+      {
+        "precision": "fp8",
+        "G": 32,
+        "subbatch_config": "131072:select4",
+        "checkpoint_layers": [
+          4
+        ],
+        "padded_tokens": [
+          65053
+        ],
+        "subbatches": 1,
+        "completion_tokens": 58248,
+        "median_ms": null,
+        "completion_token_s": null,
+        "peak_gib": null,
+        "oom": true,
+        "timed_repeats": 0,
+        "loss_vs_first": null,
+        "logprob_bitexact": false
+      },
+      {
+        "precision": "fp8",
+        "G": 64,
+        "subbatch_config": "65536:auto",
+        "checkpoint_layers": [
+          14,
+          13,
+          1
+        ],
+        "padded_tokens": [
+          57130,
+          53572,
+          27340
+        ],
+        "subbatches": 3,
+        "completion_tokens": 122158,
+        "median_ms": 5961.284167133272,
+        "completion_token_s": 20491.89345367924,
+        "peak_gib": 107.11313724517822,
+        "oom": false,
+        "timed_repeats": 2,
+        "loss_vs_first": 0.0,
+        "logprob_bitexact": true
+      },
+      {
+        "precision": "fp8",
+        "G": 64,
+        "subbatch_config": "131072:auto",
+        "checkpoint_layers": [
+          19,
+          1
+        ],
+        "padded_tokens": [
+          108142,
+          27340
+        ],
+        "subbatches": 2,
+        "completion_tokens": 122158,
+        "median_ms": 6167.254681233317,
+        "completion_token_s": 19807.51668513405,
+        "peak_gib": 107.17880916595459,
+        "oom": false,
+        "timed_repeats": 2,
+        "loss_vs_first": 0.0,
+        "logprob_bitexact": true
+      },
+      {
+        "precision": "fp8",
+        "G": 64,
+        "subbatch_config": "262144:auto",
+        "checkpoint_layers": [
+          20
+        ],
+        "padded_tokens": [
+          132922
+        ],
+        "subbatches": 1,
+        "completion_tokens": 122158,
+        "median_ms": 6141.788457985967,
+        "completion_token_s": 19889.646287175838,
+        "peak_gib": 98.69865894317627,
+        "oom": false,
+        "timed_repeats": 2,
+        "loss_vs_first": -1.4901161193847656e-08,
+        "logprob_bitexact": true
+      }
+    ]
+  },
+  "head_tiles": {
+    "scope": "same actual G32 trainer computation with58248completiontokens,three timed repeats",
+    "rows": [
+      {
+        "tile_config": "4096:16384",
+        "median_ms": 2925.660132430494,
+        "peak_gib": 97.81662845611572,
+        "completion_token_s": 19909.35288563762,
+        "speedup": 1.0,
+        "sequence_mean_logratio_max_abs": 0.0,
+        "completion_token_mean_abs": 0.0
+      },
+      {
+        "tile_config": "8192:16384",
+        "median_ms": 2905.4203666746616,
+        "peak_gib": 98.11859703063965,
+        "completion_token_s": 20048.045600598078,
+        "speedup": 1.0069662090856055,
+        "sequence_mean_logratio_max_abs": 0.0,
+        "completion_token_mean_abs": 0.0
+      },
+      {
+        "tile_config": "4096:32768",
+        "median_ms": 2914.54179212451,
+        "peak_gib": 100.00790691375732,
+        "completion_token_s": 19985.30271804441,
+        "speedup": 1.00381478156739,
+        "sequence_mean_logratio_max_abs": 3.280989702147963e-08,
+        "completion_token_mean_abs": 1.2484147760005726e-07
+      },
+      {
+        "tile_config": "8192:32768",
+        "median_ms": 2903.2598165795207,
+        "peak_gib": 98.94044399261475,
+        "completion_token_s": 20062.964970398327,
+        "speedup": 1.0077155739638088,
+        "sequence_mean_logratio_max_abs": 3.280989702147963e-08,
+        "completion_token_mean_abs": 1.2484147760005726e-07
+      },
+      {
+        "tile_config": "8192:65536",
+        "median_ms": 2902.5209937244654,
+        "peak_gib": 103.33129596710205,
+        "completion_token_s": 20068.07190230075,
+        "speedup": 1.0079720831498058,
+        "sequence_mean_logratio_max_abs": 3.65969832216706e-08,
+        "completion_token_mean_abs": 1.3197995940572582e-07
+      },
+      {
+        "tile_config": "16384:32768",
+        "median_ms": 2899.4811857119203,
+        "peak_gib": 104.75149631500244,
+        "completion_token_s": 20089.111213080057,
+        "speedup": 1.0090288382789232,
+        "sequence_mean_logratio_max_abs": 3.280989702147963e-08,
+        "completion_token_mean_abs": 1.2484147760005726e-07
+      },
+      {
+        "tile_config": "16384:65536",
+        "median_ms": 2899.5844228193164,
+        "peak_gib": 108.97136783599854,
+        "completion_token_s": 20088.39595826096,
+        "speedup": 1.008992912710513,
+        "sequence_mean_logratio_max_abs": 3.65969832216706e-08,
+        "completion_token_mean_abs": 1.3197995940572582e-07
+      }
+    ],
+    "production_candidate": null,
+    "numerical_boundary": "Changed head tile changes backward quantization scale granularity; selected final q_norm gradient relativeL2 about0.045-0.063. No equivalence or training quality claim."
+  },
+  "pointwise": {
+    "scope": "360-1 H200, separate ABAB comparison on same58248-token G32 replayed batch; no trainer-rollout decode claim",
+    "source_sha256": "6db8909ebf4c9c52c05067a7d130f777a76492216cf028d6f2221a2a31f21fa7",
+    "token_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+    "rows": [
+      {
+        "arm": 1,
+        "enabled": false,
+        "median_ms": 3107.1930820471607,
+        "peak_gib": 98.0016884803772,
+        "timed_repeats": 3,
+        "loss": 0.29771000146865845,
+        "logprob_bitexact": true,
+        "selected_gradient_relative_l2_max": 0.0
+      },
+      {
+        "arm": 2,
+        "enabled": true,
+        "median_ms": 3059.8676539957523,
+        "peak_gib": 86.59144973754883,
+        "timed_repeats": 3,
+        "loss": 0.29771000146865845,
+        "logprob_bitexact": true,
+        "selected_gradient_relative_l2_max": 0.0008950532646849751
+      },
+      {
+        "arm": 3,
+        "enabled": false,
+        "median_ms": 3130.6612150510773,
+        "peak_gib": 97.63585758209229,
+        "timed_repeats": 3,
+        "loss": 0.29771000146865845,
+        "logprob_bitexact": true,
+        "selected_gradient_relative_l2_max": 0.0002324342349311337
+      },
+      {
+        "arm": 4,
+        "enabled": true,
+        "median_ms": 2993.4781789779663,
+        "peak_gib": 84.63372707366943,
+        "timed_repeats": 3,
+        "loss": 0.29771000146865845,
+        "logprob_bitexact": true,
+        "selected_gradient_relative_l2_max": 0.0008918191306293011
+      }
+    ],
+    "median_arm_speedup": 1.0304804102087588,
+    "paired_speedups": [
+      1.0154664950915795,
+      1.0458273045170312
+    ],
+    "fp32_update_passed": true,
+    "default_enabled": false
+  },
+  "kernel_profile": {
+    "scope": "one correctly-dispatched actual-GSPO step; each raw CUDA kernel counted once; instrumentation affects timing",
+    "kernel_total_ms": 2741.1486749999926,
+    "categories": [
+      {
+        "category": "PyTorch elementwise",
+        "ms": 783.1389999999939,
+        "pct": 28.569738195612317,
+        "count": 23135
+      },
+      {
+        "category": "Copy/cast/concat",
+        "ms": 670.1552079999982,
+        "pct": 24.44797008319879,
+        "count": 8761
+      },
+      {
+        "category": "FP8 GEMM",
+        "ms": 268.4311989999998,
+        "pct": 9.792653767676448,
+        "count": 2716
+      },
+      {
+        "category": "Compiled elementwise/reduction",
+        "ms": 224.29960300000025,
+        "pct": 8.182686515535346,
+        "count": 852
+      },
+      {
+        "category": "FP8 quantization",
+        "ms": 167.59327000000033,
+        "pct": 6.113979570991376,
+        "count": 4031
+      },
+      {
+        "category": "Other GEMM",
+        "ms": 134.60618600000006,
+        "pct": 4.910575892057385,
+        "count": 1596
+      },
+      {
+        "category": "PyTorch reductions",
+        "ms": 130.8917690000002,
+        "pct": 4.775070035192474,
+        "count": 2848
+      },
+      {
+        "category": "GDN recurrent",
+        "ms": 103.9188720000001,
+        "pct": 3.7910702526925277,
+        "count": 756
+      },
+      {
+        "category": "FlashAttention",
+        "ms": 102.543234,
+        "pct": 3.7408855249341872,
+        "count": 265
+      },
+      {
+        "category": "Other kernels",
+        "ms": 80.27980200000006,
+        "pct": 2.9286920017207847,
+        "count": 1169
+      },
+      {
+        "category": "Reference conv",
+        "ms": 75.29053200000001,
+        "pct": 2.7466781603883708,
+        "count": 72
+      }
+    ],
+    "invalid_traces": [
+      "profile_g32",
+      "profile_g32_v32"
+    ]
+  },
+  "mfu": {
+    "true_mixed_precision_MFU": null,
+    "reason": "Missing complete operation-by-precision counts, GDN/attention/reference and actual checkpoint ledger",
+    "static_coefficients": {
+      "GDN_layers": 18,
+      "full_attention_layers": 6,
+      "GDN_FP8_weight_elements_per_layer": 21495808,
+      "full_attention_FP8_weight_elements_per_layer": 18350080,
+      "total_decoder_FP8_weight_elements": 497025024,
+      "excluded_ab_weight_elements": 589824,
+      "tied_head_weight_elements": 254279680
+    },
+    "partial_projection_backward_rate": {
+      "scope": "FP8 decoder projection dgrad+wgrad only; source-recorded shapes from one profiled actual GSPO step",
+      "logical_flops": 129154708144128,
+      "GEMM_calls": 1000,
+      "step_median_ms": 2837.3614391312003,
+      "achieved_TFLOPs_s": 45.51930055963373,
+      "MFU": null,
+      "normalized_utilization": null,
+      "excludes": [
+        "all projection forward and checkpoint recompute",
+        "LM head forward/logits recompute/dgrad/wgrad",
+        "BF16 reference",
+        "GDN internal matrix work and backward",
+        "attention and backward",
+        "padding and kernel tiling",
+        "quantization and elementwise operations"
+      ],
+      "note": "A partial arithmetic-rate lower bound; not MFU or total GEMM HFU. No hardware peak normalization reported without verified precision peak and complete operation ledger."
+    },
+    "GEMM_only_model_estimate": {
+      "schema": "poor-rl-gemm-only-model-estimate-v1",
+      "created_utc": "2026-10-05T01:42:34.947079+00:00",
+      "scope": "One H200 G32 fixed-shape microbenchmark: useful policy projection/head GEMMs only; denominator includes frozen BF16 reference forward",
+      "declared_dense_peak_FLOPs_s": {
+        "fp8": 1979000000000000.0,
+        "bf16": 989500000000000.0,
+        "tf32": 494750000000000.0
+      },
+      "peak_source": "Root-supplied H200 SXM dense theoretical peaks; not independently benchmarked",
+      "formula": "100*sum(useful_FLOPs_by_precision / declared_dense_peak_by_precision) / (trainer_gpus*timing_s)",
+      "shared_prefix_tokens": 2560,
+      "prompt_tokens": 2623,
+      "decoder_FP8_forward_FLOPs_per_token": 994050048,
+      "excluded_AB_BF16_forward_FLOPs_per_token": 1179648,
+      "head_forward_FLOPs_per_scored_token": 508559360,
+      "rows": [
+        {
+          "precision": "bf16",
+          "group": 32,
+          "trainer_gpus": 1,
+          "unpad_shared_forward_tokens": 62824,
+          "trained_completion_tokens": 58248,
+          "median_fwd_bwd_including_ref_s": 2.9250696655362844,
+          "useful_GEMM_FLOPs_by_precision": {
+            "fp8": 0,
+            "bf16": 217195496865792,
+            "tf32": 59245131202560
+          },
+          "ideal_GEMM_time_s": 0.3392478618200222,
+          "GEMM_only_model_utilization_estimate_percent": 11.597941266736438,
+          "true_MFU": null,
+          "source_sha256": "6c446813ea11655b70a3bfef77a4104b3cc6fa4d6d2319fd54c30e1c5f693dd2"
+        },
+        {
+          "precision": "fp8",
+          "group": 32,
+          "trainer_gpus": 1,
+          "unpad_shared_forward_tokens": 62824,
+          "trained_completion_tokens": 58248,
+          "median_fwd_bwd_including_ref_s": 2.9232756681740284,
+          "useful_GEMM_FLOPs_by_precision": {
+            "fp8": 276218297450496,
+            "bf16": 222330617856,
+            "tf32": 0
+          },
+          "ideal_GEMM_time_s": 0.13979937275705306,
+          "GEMM_only_model_utilization_estimate_percent": 4.78228496474218,
+          "true_MFU": null,
+          "source_sha256": "4b8ac6bb40a490673c874ed8fa708eb312610aa8c74bcc245ab93d1c98aa7e51"
+        },
+        {
+          "precision": "fp8_runtime_v3_fixedG32_ACT80",
+          "group": 32,
+          "trainer_gpus": 1,
+          "unpad_shared_forward_tokens": 62824,
+          "trained_completion_tokens": 58248,
+          "median_fwd_bwd_including_ref_s": 2.753025776706636,
+          "useful_GEMM_FLOPs_by_precision": {
+            "fp8": 276218297450496,
+            "bf16": 222330617856,
+            "tf32": 0
+          },
+          "ideal_GEMM_time_s": 0.13979937275705306,
+          "GEMM_only_model_utilization_estimate_percent": 5.078026291649581,
+          "true_MFU": null,
+          "source_sha256": {
+            "fp8.py": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+            "fp8_alignment.py": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d",
+            "trainer.py": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb",
+            "fast_logprob.py": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f"
+          },
+          "RLFORGE_FP8_ALIGN_BACKWARD": false,
+          "activation_budget_gib": 80,
+          "evidence_sha256": "48f36bcb783a012760b25893e92fb9a1873c6dcc2f4b94133a5c119d6bfa0c7d"
+        },
+        {
+          "precision": "fp8_compact_fixedG32_ACT128",
+          "group": 32,
+          "trainer_gpus": 1,
+          "unpad_shared_forward_tokens": 62824,
+          "trained_completion_tokens": 58248,
+          "median_fwd_bwd_including_ref_s": 2.3966553658246994,
+          "useful_GEMM_FLOPs_by_precision": {
+            "fp8": 276218297450496,
+            "bf16": 222330617856,
+            "tf32": 0
+          },
+          "ideal_GEMM_time_s": 0.13979937275705306,
+          "GEMM_only_model_utilization_estimate_percent": 5.833102862870211,
+          "true_MFU": null,
+          "source_sha256": {
+            "fp8.py": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+            "fp8_alignment.py": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d",
+            "trainer.py": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb",
+            "fast_logprob.py": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f"
+          },
+          "RLFORGE_FP8_ALIGN_BACKWARD": true,
+          "activation_budget_gib": 128,
+          "evidence_sha256": "97d60c9a16a5dad1771b7946fe344fd0e086d3656bd375b5417f45098ee639b7"
+        }
+      ],
+      "token_source_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+      "excluded": [
+        "all GDN internal and backward matrix work",
+        "attention QK/AV and backward",
+        "norm/softmax/nonlinearity/quantization",
+        "embedding lookup",
+        "padding",
+        "checkpoint recompute",
+        "head backward logits reconstruction",
+        "frozen reference compute from numerator"
+      ],
+      "assumptions": [
+        "Three useful GEMMs per differentiable decoder projection: forward/dgrad/wgrad",
+        "Three useful head GEMMs per scored completion token; reconstruction is execution overhead",
+        "Decoder BF16 control uses BF16 GEMMs under autocast; head forward BF16 and head dgrad/wgrad TF32",
+        "Forward token count comes from one shared-prefix subbatch, excludes padded branch positions",
+        "This additive peak-normalized partial estimate is not measured true MFU/HFU; normalization differs by precision"
+      ]
+    }
+  },
+  "quality_boundary": "Completed FP8 variants preserve FP32 masters and finite aggregate norms; stable20-step KL/log-ratio is bounded evidence. LR0 log-ratioP90 around0.014 remains aboveBF16 0.001551, and shared-prefill fixed-token candidate passed4/6 versusvendor2/6 without promotion. Strict train/decode consistency and long-run RL quality remain unaccepted. Failed variants, v2 stride fallback and110 InternalServerError judge failures remain explicitly archived.",
+  "evidence_sha256": [
+    {
+      "artifact": "bf16.saturation.log",
+      "sha256": "d8db014e8f7946507f64bbbfba5312a38fe23f2041c76d6207312ca5af9f5b54",
+      "remote_match": true
+    },
+    {
+      "artifact": "fp8.saturation.log",
+      "sha256": "c74528bdbefecc4b607699ec8eecbac7179901eb2f3a051d4d281f506543d5ce",
+      "remote_match": true
+    },
+    {
+      "artifact": "batch/bf16_g32.json",
+      "sha256": "6c446813ea11655b70a3bfef77a4104b3cc6fa4d6d2319fd54c30e1c5f693dd2",
+      "remote_match": true
+    },
+    {
+      "artifact": "batch/fp8_g32.json",
+      "sha256": "4b8ac6bb40a490673c874ed8fa708eb312610aa8c74bcc245ab93d1c98aa7e51",
+      "remote_match": true
+    },
+    {
+      "artifact": "batch/bf16_g64.json",
+      "sha256": "e1c63146e052f8cdb4e2340093d1380c20b2683e52998eebacca7a76446eb0dd",
+      "remote_match": true
+    },
+    {
+      "artifact": "batch/fp8_g64.json",
+      "sha256": "8ede02e83a807598e7c87f5fbf010cda874ad8769302a01a7351946f4c9fb9ca",
+      "remote_match": true
+    },
+    {
+      "artifact": "batch/head_tiles_fp8_g32.json",
+      "sha256": "fb33e41d83bfbcc39de009bf15222d054832031a3dcc44a8827d2dbe16baef71",
+      "remote_match": true
+    },
+    {
+      "artifact": "kernel/profile_g32_fast.json",
+      "sha256": "2a1ace1ee35d23946d9c2c0e4f860efae9c3f1a8845132076eaf5da01af1a417",
+      "remote_match": true
+    },
+    {
+      "artifact": "kernel/profile_g32_fast_summary.json",
+      "sha256": "3fa6c516808dc48e03d207af79b3e1ad8db7049028537aa104f79030a6ff6e8a",
+      "remote_match": true
+    },
+    {
+      "artifact": "run_scale_benchmark.sh",
+      "sha256": "6cc466d86bc482647235649f3da98554e6ccf97780a36094ce0a7eded90922f4",
+      "remote_match": true
+    },
+    {
+      "artifact": "train_filestore.py",
+      "sha256": "47a2a4a6588cc3ea25217449788506f04fcc6dd91de689a173b1db95050bdfd5",
+      "remote_match": true
+    },
+    {
+      "artifact": "kernel/pointwise_flat_3601_g32.json",
+      "sha256": "9a25aad0562d98292db4cb84639eb9eeaf8d13a7656c516032d17c30535fd3ec",
+      "remote_match": true
+    }
+  ],
+  "source_provenance": {
+    "base_commit": "8c485ab74dd82954e1a7727355f48438b2665620",
+    "batch_and_head_tile_source_hashes": {
+      "fp8.py": "86c8b738f14b1e4f204db10741ba7fbe06f4fff302d1f614cb353934e21b96bc",
+      "fp8_alignment.py": "31e44bd7ce116cee5f6d53f7be6663d81d2cf7ecfeaf59d9cdf2ca950e2f5b73",
+      "trainer.py": "d5ebda556211d1137555a9dca2d77498f233164e0236788b4d30a5d920538747",
+      "fast_logprob.py": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f",
+      "prefix_share.py": "b4df9db9d6961ecf8d112bf61ed1e2a7752889a3ea7d78199c21e9cdba84c92c"
+    },
+    "profile_fp8_source_sha256": "86c8b738f14b1e4f204db10741ba7fbe06f4fff302d1f614cb353934e21b96bc",
+    "pointwise_alignment_source_sha256": "6db8909ebf4c9c52c05067a7d130f777a76492216cf028d6f2221a2a31f21fa7",
+    "serving_harness_sha256": {
+      "serve_scale.sh": "094e8dfe62734692f3437569b83a5df9ec1c5d30cba82aace6f2d6645bba01ea",
+      "run_rollout_scale.sh": "d5faf97b7ef01657e743935c8e78b30406239a71e63b970d9eca51ed734b3798",
+      "bench_sat_scale.py": "fc091e000a48c0a30169455e2b0603015e8692923a9a5dd4f7e7c6d92a12659f"
+    },
+    "serving_flags": [
+      "TP1",
+      "BF16 activations/KV",
+      "FP8 PTPC plugin only in FP8 arm",
+      "gdn_prefill_backend=triton in FP8 arm",
+      "max_num_seqs2048",
+      "max_num_batched_tokens32768",
+      "max_cudagraph_capture_size2048",
+      "async_scheduling",
+      "gpu_memory_utilization0.80"
+    ]
+  },
+  "unmeasured_followup": "Pointwise80/96/104GiB auto-checkpoint budget sweep aborted on360-1 CUDA hardware/ECC error before first arm; no measurements and no gain claim.",
+  "summarizer_provenance": {
+    "file": "summarize_e2e.py",
+    "sha256": "1c084efa2233563b4cffe18bcee28cd49ce3bab929574d38d12ad97728f23824",
+    "historical_exact_completion_token_s": 53690.65646175791,
+    "historical_rounded_fallback_completion_token_s": 53689.622468844114,
+    "historical_rounded_fallback_relative_error": 1.925833994109727e-05,
+    "scope": "optimizer steps4-20 trained completion tokens and wall time; no raw text emitted"
+  },
+  "bf16_memory_budget": {
+    "scope": "Single H200 BF16 G32 replayed fixed-token trainer probe; three repeats per arm, no optimizer/DDP/serving/judge in timing",
+    "source_sha256": "6db8909ebf4c9c52c05067a7d130f777a76492216cf028d6f2221a2a31f21fa7",
+    "token_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+    "evidence_sha256": "453367a28c140f44c666f00d57d5694949675b3b65f3e32c75c05c09d1507c29",
+    "completion_tokens": 58248,
+    "G": 32,
+    "rows": [
+      {
+        "budget_gib": 80,
+        "checkpoint_layers": [
+          15
+        ],
+        "median_ms": 2905.2944891154766,
+        "peak_gib": 86.01924705505371,
+        "logprob_bitexact": true,
+        "loss_difference": 0.0,
+        "selected_grad_relative_l2_max": 0.0,
+        "timed_repeats": 3
+      },
+      {
+        "budget_gib": 96,
+        "checkpoint_layers": [
+          13
+        ],
+        "median_ms": 2858.419426716864,
+        "peak_gib": 103.29171133041382,
+        "logprob_bitexact": true,
+        "loss_difference": 0.0,
+        "selected_grad_relative_l2_max": 7.894380041449394e-05,
+        "timed_repeats": 3
+      },
+      {
+        "budget_gib": 104,
+        "checkpoint_layers": [
+          12
+        ],
+        "median_ms": 2832.217240706086,
+        "peak_gib": 112.40963935852051,
+        "logprob_bitexact": true,
+        "loss_difference": 0.0,
+        "selected_grad_relative_l2_max": 0.00046852081147231387,
+        "timed_repeats": 3
+      },
+      {
+        "budget_gib": 112,
+        "checkpoint_layers": [
+          11
+        ],
+        "median_ms": 2819.488218985498,
+        "peak_gib": 118.85460710525513,
+        "logprob_bitexact": true,
+        "loss_difference": 0.0,
+        "selected_grad_relative_l2_max": 0.0004696530911613925,
+        "timed_repeats": 3
+      },
+      {
+        "budget_gib": 80,
+        "checkpoint_layers": [
+          15
+        ],
+        "median_ms": 2909.4829512760043,
+        "peak_gib": 87.47011709213257,
+        "logprob_bitexact": true,
+        "loss_difference": 0.0,
+        "selected_grad_relative_l2_max": 0.0004681701307521525,
+        "timed_repeats": 3
+      }
+    ],
+    "fp32_update_passed": true
+  },
+  "prototype_boundary": "Norm-only high-budget and tail prototypes are excluded from shipped source; decode candidates remain unaccepted.",
+  "decode_patch_probe": {
+    "unique_prompts": 3,
+    "case_lengths": [
+      128,
+      256
+    ],
+    "baseline_pass_count": 2,
+    "patched_pass_count": 5,
+    "all_patched_pass": false,
+    "causal_limitation": "Generation changed between baseline and patch for some cases. Per-arm prefill/decode uses identical generated tokens, but cross-arm means are not fixed-token causal comparison.",
+    "disposition": "Do not promote patch or claim FP8 train/decode readiness; one patched mean remains beyond 0.004 and tokenwise errors remain.",
+    "rows": [
+      {
+        "case": 0,
+        "prompt_tokens": 2623,
+        "max_tokens": 128,
+        "baseline_mean": -0.005031898804706447,
+        "patched_mean": -0.0013717202082879076,
+        "baseline_mean_abs": 0.036847430980547546,
+        "patched_mean_abs": 0.03785824275664629,
+        "baseline_pass": false,
+        "patched_pass": true,
+        "same_full_tokens": false,
+        "completion_same_tokens": 41,
+        "first_differing_completion": 6
+      },
+      {
+        "case": 1,
+        "prompt_tokens": 29,
+        "max_tokens": 128,
+        "baseline_mean": -0.006879039235191842,
+        "patched_mean": -0.00042008404011850686,
+        "baseline_mean_abs": 0.015935078813672954,
+        "patched_mean_abs": 0.016567785877303454,
+        "baseline_pass": false,
+        "patched_pass": true,
+        "same_full_tokens": false,
+        "completion_same_tokens": 28,
+        "first_differing_completion": 25
+      },
+      {
+        "case": 2,
+        "prompt_tokens": 41,
+        "max_tokens": 128,
+        "baseline_mean": -0.005258006571613683,
+        "patched_mean": 0.0024729977825368454,
+        "baseline_mean_abs": 0.022172876798400187,
+        "patched_mean_abs": 0.02149450326930924,
+        "baseline_pass": false,
+        "patched_pass": true,
+        "same_full_tokens": false,
+        "completion_same_tokens": 9,
+        "first_differing_completion": 9
+      },
+      {
+        "case": 0,
+        "prompt_tokens": 2623,
+        "max_tokens": 256,
+        "baseline_mean": -0.001132618636683208,
+        "patched_mean": 0.0013994689522730808,
+        "baseline_mean_abs": 0.03340490510833308,
+        "patched_mean_abs": 0.027052478890898984,
+        "baseline_pass": true,
+        "patched_pass": true,
+        "same_full_tokens": false,
+        "completion_same_tokens": 81,
+        "first_differing_completion": 6
+      },
+      {
+        "case": 1,
+        "prompt_tokens": 29,
+        "max_tokens": 256,
+        "baseline_mean": -0.010346736384266725,
+        "patched_mean": -0.004401277571110196,
+        "baseline_mean_abs": 0.021014273594357175,
+        "patched_mean_abs": 0.024626772914662753,
+        "baseline_pass": false,
+        "patched_pass": false,
+        "same_full_tokens": false,
+        "completion_same_tokens": 34,
+        "first_differing_completion": 25
+      },
+      {
+        "case": 2,
+        "prompt_tokens": 41,
+        "max_tokens": 256,
+        "baseline_mean": -0.003976973742490703,
+        "patched_mean": -0.0010828652505974201,
+        "baseline_mean_abs": 0.017940341685955846,
+        "patched_mean_abs": 0.0282357098715158,
+        "baseline_pass": true,
+        "patched_pass": true,
+        "same_full_tokens": false,
+        "completion_same_tokens": 10,
+        "first_differing_completion": 9
+      }
+    ],
+    "threshold": 0.004,
+    "scope": "Same-weight within-serving prefill versus recurrent decode per arm; three independent prompts at128/256 completion tokens. No trainer/rollout equality claim.",
+    "evidence_sha256": {
+      "within_serving_patch0.json": "b1137a935f3da0bdf166266f00476f74ef96f37de5f1bad12439510a3c4afec0",
+      "within_serving_patch1.json": "d312226be7c819ed34b166290eda394cbe3f32289dac3f4182a23f27443b13a9",
+      "comparison.json": "83c2c27f74beaa46d4620b8d23a1778b563ddf324a83d4a5425690e5b77d8270"
+    }
+  },
+  "e2e_provenance": {
+    "inputs_identical": true,
+    "hyperparameters_identical": true,
+    "judge_configuration_identical": true,
+    "environment_versions_identical": true,
+    "inputs_sha256": {
+      "initial_checkpoint": "4c8d1c2b5338650b5033518ea8485d4233fadca58250ed1ea5a16e12171392c9",
+      "reference_checkpoint": "d89e5211c4e03a0c7ec5e98a8af312db186fc0aaf0eb3190e016819bef373018",
+      "train_think.jsonl": "3a909dddfc30b5aaac287f87f55796a0f97f577d41b907885e733844780223f2",
+      "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "tokenizer_config.json": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87",
+      "chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+      "generation_config.json": "afa48c3c3f7a3e873e82b5e77af288143c5b400d5df39ae4405e40e8e92d9fcb"
+    },
+    "hyperparams": {
+      "seed": 0,
+      "cps_per_rank": 256,
+      "ngen": 32,
+      "gas": 8,
+      "lr": 2e-06,
+      "warmup_steps": 5,
+      "eps_low": 0.004,
+      "eps_high": 0.004,
+      "kl_beta": 0.05,
+      "max_completion": 16384,
+      "max_model_len": 24576,
+      "temperature": 1.0,
+      "top_p": 1.0,
+      "steps": 20,
+      "max_staleness": 3,
+      "inflight": 960
+    },
+    "judge_config": {
+      "enabled": true,
+      "k": 2,
+      "threads": 16,
+      "fraction": 0.24,
+      "rpm": 18,
+      "burst": 16,
+      "timeout_s": 90,
+      "selection": "scoring order"
+    },
+    "environment_versions": {
+      "torch": "2.13.0",
+      "transformers": "5.17.0",
+      "trl": "1.14.0",
+      "vllm": "0.30.0",
+      "accelerate": "1.15.0"
+    },
+    "common_source_sha256": {
+      "rlforge.__init__": "9f5875b19df72d47b047c454918e4d60463f2d7168b89eef8185eecf203a8f97",
+      "rlforge.agent_cli": "e9ac12cfd9fb6b10c049e0a1f74f5231b34c63376538b0400e076428fc7e9287",
+      "rlforge.agent_file_memory": "c32143bc564363e5dbdba7b311af5e23badd46c069b9e633f407fb711884f4f0",
+      "rlforge.agent_mcp": "f0d3acd8dc69cb6feac49b3185cc3687d77bd738df7c3b08548bd3ad263ead3f",
+      "rlforge.agent_policy": "0761a6d6ce9a91480769ade8226808208a02b5a57bf1a7bf7d1c1c695a86b4d8",
+      "rlforge.agent_tools": "b0cbee2e84be70defa498e99cafa50cd5bfb4a0bf4ca3951fa41102dec859e62",
+      "rlforge.agentic": "8f0d423f4c372f9444dea8533f4d4d87288b5a8c57420543db1a6a7db07e6ee5",
+      "rlforge.dashboard": "9e9d5714616062397c0128fd7b331199abcef4e12cdf658dc04250c4e91a2d4f",
+      "rlforge.dp_route": "ed41c1d86271371dc2ccd678fbf5a143924540b2647c8f24efe8d068321ea000",
+      "rlforge.drop_audit": "6e7d9fd3a92128515224499e038cf121f5683e8017e18551c8fbf2d21da457de",
+      "rlforge.eval_mcq": "e5ee68030997097f87895c370932d3a54d9cf884570d76da5862a6c031833afc",
+      "rlforge.fast_logprob": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f",
+      "rlforge.fp8_serving": "b15ccea1083f5913b423004df219f668337463c314cadc9f94e4c789c25704c0",
+      "rlforge.fused_ops": "d433c924354a45046b1163e4a6e1878166e9bce9c6a2a970243c1c36bba0c324",
+      "rlforge.gspo": "21fd12a9857de4218b82ab19ae5d212399fcbd1198bfa357021cf4bed396e965",
+      "rlforge.hybrid_packing": "ff64217b8bf4e4a0976dbb9b250ae84aef63eef44f134b5a0dbffd06d928eec7",
+      "rlforge.knowledge": "2ce4ec100640ef4bcbbd4578de471d848326b1bf352ccb23836e594127f63b4f",
+      "rlforge.prefix_share": "b4df9db9d6961ecf8d112bf61ed1e2a7752889a3ea7d78199c21e9cdba84c92c",
+      "rlforge.prefix_share_sm80": "86cc7e1fa2c15261046f3685d40cbfa1bffd54a52f975cd68357244ba4a2d910",
+      "rlforge.report": "456a102094b979a01469b6438ced329ab0c05a2c3912e00716961a242a4281e3",
+      "rlforge.rl_panel": "e0357d62e14d51cc7b441c341696a1e5d8822a30d3d1c58d280761373bcbe604",
+      "rlforge.rl_trials": "14173c75d46f8be76a58f2a6d4ff3bccd181cb888227e9e87322c9cc2f678dcf",
+      "rlforge.score_loop": "9f14f59e6f50f8d3c9e676753cbd8b5b9ed6e52b023b4446965dab8b21738425",
+      "rlforge.watchdog": "7504ec509f5fd72d93311c7f816edd5f9fe8c970c282bd50dc42bb8c0dc37fa2",
+      "rlforge.rewards.__init__": "0d068036168284eecf553ba0ecba77769af9dfeca6b4e54ae10fe20685cb8004",
+      "rlforge.rewards.mcq": "0db9b4d80a4aba75c5f3784c8a11de1ff03dbb5d401b0ba5fb253d7cbb694a8e",
+      "rlforge.rollout.__init__": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rlforge.rollout.lora_agent": "cbf9aadf3609712737dc0e1f9eb805f76a8937b37a644066b93026da03f0c415",
+      "rlforge.rollout.router": "3020f5afb0d289895f5d992030ad116738e4bb8e01e187f6bd25672dc8ed97ed"
+    },
+    "runs": [
+      {
+        "run_name": "bf16_runtime3",
+        "metadata_sha256": "f35ec172483065b84ead16bed885b2bce1d1ed2cc366ee99cffc6353c1fc6563",
+        "bootstrap_sha256": {},
+        "tuning_env": {
+          "RLFORGE_FUSED_OPS": "",
+          "RLFORGE_FAST_LOGPROB": "1",
+          "RLFORGE_LOGPROB_BWD": "tf32",
+          "RLFORGE_FP8_ALIGN_COMPILE": "1",
+          "RLFORGE_FP8_ALIGN_POINTWISE": "",
+          "RLFORGE_FP8_GRAPHS": "0",
+          "RLFORGE_FP8_HEAD_GRAPH": "0",
+          "RLFORGE_LOGPROB_TOK_CHUNK": "",
+          "RLFORGE_LOGPROB_VOCAB_CHUNK": "",
+          "RLFORGE_SB_ACT_GB": "80",
+          "RLFORGE_SB_MEM_FULL_KB": "128",
+          "RLFORGE_SB_MEM_CKPT_KB": "4.7",
+          "RLFORGE_SB_MEM_BASE_KB": "16"
+        },
+        "precision_manifest": {
+          "master": "float32",
+          "optimizer": "float32 Adam",
+          "compute": "bfloat16 autocast FA3, fast logprob TF32 backward",
+          "rollout": "bfloat16",
+          "kv": "auto/bfloat16"
+        },
+        "started_utc": "2026-10-05T01:25:30.328112+00:00",
+        "ended_utc": "2026-10-05T01:45:23.846031+00:00",
+        "trainer_exit_code": 0,
+        "master_header": {
+          "saved_files": 1,
+          "tensor_count": 320,
+          "dtype_counts": {
+            "F32": 320
+          }
+        },
+        "stop_reason": "completed",
+        "changed_source_sha256": {
+          "rlforge.fp8": "86c8b738f14b1e4f204db10741ba7fbe06f4fff302d1f614cb353934e21b96bc",
+          "rlforge.fp8_alignment": "31e44bd7ce116cee5f6d53f7be6663d81d2cf7ecfeaf59d9cdf2ca950e2f5b73",
+          "rlforge.trainer": "d5ebda556211d1137555a9dca2d77498f233164e0236788b4d30a5d920538747"
+        }
+      },
+      {
+        "run_name": "fp8_pointwise80",
+        "metadata_sha256": "aeed46b068d1aa09fd9bcfcc5fd361cf104d3a77dba1ef24c5151b5e9f9d7625",
+        "bootstrap_sha256": {
+          "train_filestore.py": "47a2a4a6588cc3ea25217449788506f04fcc6dd91de689a173b1db95050bdfd5",
+          "serve_driver.py": "d609bd036730483239b8ffb4826a83b2bb098186c1df7b636f6f3ec8732ab51b",
+          "run_scale_benchmark.sh": "b1135cb6c2009c791b1d0b6b02231b7bbc16c21505d9ccb9ad87f584000d5028"
+        },
+        "tuning_env": {
+          "RLFORGE_FUSED_OPS": "",
+          "RLFORGE_FAST_LOGPROB": "1",
+          "RLFORGE_LOGPROB_BWD": "tf32",
+          "RLFORGE_FP8_ALIGN_COMPILE": "1",
+          "RLFORGE_FP8_ALIGN_POINTWISE": "1",
+          "RLFORGE_FP8_GRAPHS": "0",
+          "RLFORGE_FP8_HEAD_GRAPH": "0",
+          "RLFORGE_LOGPROB_TOK_CHUNK": "",
+          "RLFORGE_LOGPROB_VOCAB_CHUNK": "",
+          "RLFORGE_SB_ACT_GB": "80",
+          "RLFORGE_SB_MEM_FULL_KB": "128",
+          "RLFORGE_SB_MEM_CKPT_KB": "4.7",
+          "RLFORGE_SB_MEM_BASE_KB": "16"
+        },
+        "precision_manifest": {
+          "master": "float32",
+          "optimizer": "float32 Adam",
+          "compute": "native FP8 PTPC forward and E5M2/E4M3 backward; BF16/FP32 sensitive operations",
+          "rollout": "poor_rl_fp8 stateless PTPC",
+          "kv": "auto/bfloat16"
+        },
+        "started_utc": "2026-10-05T02:03:43.479499+00:00",
+        "ended_utc": "2026-10-05T02:30:47.872886+00:00",
+        "trainer_exit_code": 143,
+        "master_header": {
+          "saved_files": 0,
+          "tensor_count": 0,
+          "dtype_counts": {}
+        },
+        "stop_reason": "stopped_numerical_regression",
+        "changed_source_sha256": {
+          "rlforge.fp8": "86c8b738f14b1e4f204db10741ba7fbe06f4fff302d1f614cb353934e21b96bc",
+          "rlforge.fp8_alignment": "6db8909ebf4c9c52c05067a7d130f777a76492216cf028d6f2221a2a31f21fa7",
+          "rlforge.trainer": "d5ebda556211d1137555a9dca2d77498f233164e0236788b4d30a5d920538747"
+        }
+      },
+      {
+        "run_name": "fp8_runtime_cache80_v2",
+        "metadata_sha256": "b178aca80e8bed31f7564ca1708d8024d1d020512c4ba67964f78bbf4e64f572",
+        "bootstrap_sha256": {
+          "train_filestore.py": "47a2a4a6588cc3ea25217449788506f04fcc6dd91de689a173b1db95050bdfd5",
+          "serve_driver.py": "d609bd036730483239b8ffb4826a83b2bb098186c1df7b636f6f3ec8732ab51b",
+          "run_scale_benchmark.sh": "0aa92825a5214815d8d439fe7aa3c6685afff65bfd2e92d989797dc0fb0d0f22"
+        },
+        "tuning_env": {
+          "RLFORGE_FUSED_OPS": "",
+          "RLFORGE_FAST_LOGPROB": "1",
+          "RLFORGE_LOGPROB_BWD": "tf32",
+          "RLFORGE_FP8_ALIGN_COMPILE": "1",
+          "RLFORGE_FP8_ALIGN_POINTWISE": "1",
+          "RLFORGE_FP8_GRAPHS": "0",
+          "RLFORGE_FP8_HEAD_GRAPH": "0",
+          "RLFORGE_LOGPROB_TOK_CHUNK": "",
+          "RLFORGE_LOGPROB_VOCAB_CHUNK": "",
+          "RLFORGE_SB_ACT_GB": "80",
+          "RLFORGE_SB_MEM_FULL_KB": "128",
+          "RLFORGE_SB_MEM_CKPT_KB": "4.7",
+          "RLFORGE_SB_MEM_BASE_KB": "16"
+        },
+        "precision_manifest": {
+          "master": "float32",
+          "optimizer": "float32 Adam",
+          "compute": "native FP8 PTPC forward and E5M2/E4M3 backward; BF16/FP32 sensitive operations",
+          "rollout": "poor_rl_fp8 stateless PTPC",
+          "kv": "auto/bfloat16"
+        },
+        "started_utc": "2026-10-05T02:56:07.989760+00:00",
+        "ended_utc": "2026-10-05T03:12:21.075606+00:00",
+        "trainer_exit_code": 143,
+        "master_header": {
+          "saved_files": 0,
+          "tensor_count": 0,
+          "dtype_counts": {}
+        },
+        "stop_reason": "interrupted",
+        "changed_source_sha256": {
+          "rlforge.fp8": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+          "rlforge.fp8_alignment": "6db8909ebf4c9c52c05067a7d130f777a76492216cf028d6f2221a2a31f21fa7",
+          "rlforge.trainer": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb"
+        }
+      },
+      {
+        "run_name": "fp8_runtime_cache80_v3",
+        "metadata_sha256": "8e8a8f588d16f7735326ddfbd4b470b6f0c1beb1226c4d53b7e3e1782a5ba5b3",
+        "bootstrap_sha256": {
+          "train_filestore.py": "47a2a4a6588cc3ea25217449788506f04fcc6dd91de689a173b1db95050bdfd5",
+          "serve_driver.py": "d609bd036730483239b8ffb4826a83b2bb098186c1df7b636f6f3ec8732ab51b",
+          "run_scale_benchmark.sh": "0aa92825a5214815d8d439fe7aa3c6685afff65bfd2e92d989797dc0fb0d0f22"
+        },
+        "tuning_env": {
+          "RLFORGE_FUSED_OPS": "",
+          "RLFORGE_FAST_LOGPROB": "1",
+          "RLFORGE_LOGPROB_BWD": "tf32",
+          "RLFORGE_FP8_ALIGN_COMPILE": "1",
+          "RLFORGE_FP8_ALIGN_POINTWISE": "1",
+          "RLFORGE_FP8_GRAPHS": "0",
+          "RLFORGE_FP8_HEAD_GRAPH": "0",
+          "RLFORGE_LOGPROB_TOK_CHUNK": "",
+          "RLFORGE_LOGPROB_VOCAB_CHUNK": "",
+          "RLFORGE_SB_ACT_GB": "80",
+          "RLFORGE_SB_MEM_FULL_KB": "128",
+          "RLFORGE_SB_MEM_CKPT_KB": "4.7",
+          "RLFORGE_SB_MEM_BASE_KB": "16"
+        },
+        "precision_manifest": {
+          "master": "float32",
+          "optimizer": "float32 Adam",
+          "compute": "native FP8 PTPC forward and E5M2/E4M3 backward; BF16/FP32 sensitive operations",
+          "rollout": "poor_rl_fp8 stateless PTPC",
+          "kv": "auto/bfloat16"
+        },
+        "started_utc": "2026-10-05T03:16:20.654664+00:00",
+        "ended_utc": "2026-10-05T03:32:59.932517+00:00",
+        "trainer_exit_code": 0,
+        "master_header": {
+          "saved_files": 1,
+          "tensor_count": 320,
+          "dtype_counts": {
+            "F32": 320
+          }
+        },
+        "stop_reason": "completed",
+        "changed_source_sha256": {
+          "rlforge.fp8": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+          "rlforge.fp8_alignment": "6db8909ebf4c9c52c05067a7d130f777a76492216cf028d6f2221a2a31f21fa7",
+          "rlforge.trainer": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb"
+        }
+      },
+      {
+        "run_name": "fp8_compact128_v1",
+        "metadata_sha256": "2dc903e4334e1d22eee317451b4f499ec8588ff91e943f7488673da46f5dc217",
+        "bootstrap_sha256": {
+          "train_filestore.py": "47a2a4a6588cc3ea25217449788506f04fcc6dd91de689a173b1db95050bdfd5",
+          "serve_driver.py": "d609bd036730483239b8ffb4826a83b2bb098186c1df7b636f6f3ec8732ab51b",
+          "run_scale_benchmark.sh": "112f54192eb4ed731af5b1fd9e8358c1fb04a652622737ddf0a9486ac09e45c8"
+        },
+        "tuning_env": {
+          "RLFORGE_FUSED_OPS": "",
+          "RLFORGE_FAST_LOGPROB": "1",
+          "RLFORGE_LOGPROB_BWD": "tf32",
+          "RLFORGE_FP8_ALIGN_COMPILE": "1",
+          "RLFORGE_FP8_ALIGN_POINTWISE": "1",
+          "RLFORGE_FP8_ALIGN_BACKWARD": "1",
+          "VLLM_DISABLE_COMPILE_CACHE": "1",
+          "RLFORGE_FP8_GRAPHS": "0",
+          "RLFORGE_FP8_HEAD_GRAPH": "0",
+          "RLFORGE_LOGPROB_TOK_CHUNK": "",
+          "RLFORGE_LOGPROB_VOCAB_CHUNK": "",
+          "RLFORGE_SB_ACT_GB": "128",
+          "RLFORGE_SB_MEM_FULL_KB": "128",
+          "RLFORGE_SB_MEM_CKPT_KB": "4.7",
+          "RLFORGE_SB_MEM_BASE_KB": "16"
+        },
+        "precision_manifest": {
+          "master": "float32",
+          "optimizer": "float32 Adam",
+          "compute": "native FP8 PTPC forward and E5M2/E4M3 backward; BF16/FP32 sensitive operations",
+          "rollout": "poor_rl_fp8 stateless PTPC",
+          "kv": "auto/bfloat16"
+        },
+        "started_utc": "2026-10-05T04:10:04.788486+00:00",
+        "ended_utc": "2026-10-05T04:25:25.997067+00:00",
+        "trainer_exit_code": 0,
+        "master_header": {
+          "saved_files": 1,
+          "tensor_count": 320,
+          "dtype_counts": {
+            "F32": 320
+          }
+        },
+        "stop_reason": "completed",
+        "changed_source_sha256": {
+          "rlforge.fp8": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+          "rlforge.fp8_alignment": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d",
+          "rlforge.trainer": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb"
+        }
+      },
+      {
+        "run_name": "fp8_compact128_v2",
+        "metadata_sha256": "a7c6e5167ff83e81d18eba2acd0c34895b945ee23b0b5f8e6cfac3f8c30eaec6",
+        "bootstrap_sha256": {
+          "train_filestore.py": "47a2a4a6588cc3ea25217449788506f04fcc6dd91de689a173b1db95050bdfd5",
+          "serve_driver.py": "d609bd036730483239b8ffb4826a83b2bb098186c1df7b636f6f3ec8732ab51b",
+          "run_scale_benchmark.sh": "112f54192eb4ed731af5b1fd9e8358c1fb04a652622737ddf0a9486ac09e45c8"
+        },
+        "tuning_env": {
+          "RLFORGE_FUSED_OPS": "",
+          "RLFORGE_FAST_LOGPROB": "1",
+          "RLFORGE_LOGPROB_BWD": "tf32",
+          "RLFORGE_FP8_ALIGN_COMPILE": "1",
+          "RLFORGE_FP8_ALIGN_POINTWISE": "1",
+          "RLFORGE_FP8_ALIGN_BACKWARD": "1",
+          "VLLM_DISABLE_COMPILE_CACHE": "1",
+          "RLFORGE_FP8_GRAPHS": "0",
+          "RLFORGE_FP8_HEAD_GRAPH": "0",
+          "RLFORGE_LOGPROB_TOK_CHUNK": "",
+          "RLFORGE_LOGPROB_VOCAB_CHUNK": "",
+          "RLFORGE_SB_ACT_GB": "128",
+          "RLFORGE_SB_MEM_FULL_KB": "128",
+          "RLFORGE_SB_MEM_CKPT_KB": "4.7",
+          "RLFORGE_SB_MEM_BASE_KB": "16"
+        },
+        "precision_manifest": {
+          "master": "float32",
+          "optimizer": "float32 Adam",
+          "compute": "native FP8 PTPC forward and E5M2/E4M3 backward; BF16/FP32 sensitive operations",
+          "rollout": "poor_rl_fp8 stateless PTPC",
+          "kv": "auto/bfloat16"
+        },
+        "started_utc": "2026-10-05T04:43:18.110501+00:00",
+        "ended_utc": "2026-10-05T04:58:25.311488+00:00",
+        "trainer_exit_code": 0,
+        "master_header": {
+          "saved_files": 1,
+          "tensor_count": 320,
+          "dtype_counts": {
+            "F32": 320
+          }
+        },
+        "stop_reason": "completed",
+        "changed_source_sha256": {
+          "rlforge.fp8": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+          "rlforge.fp8_alignment": "f613be41e4b9411b4c586b89de85c524aa970088c12beb79148ddbeaecb57b34",
+          "rlforge.trainer": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb"
+        }
+      },
+      {
+        "run_name": "fp8_compact128_v3",
+        "metadata_sha256": "14fe45111fa5bf6e38bb9ccd27b0240bf46ba0e4ce16c05ceade43d162e22d00",
+        "bootstrap_sha256": {
+          "train_filestore.py": "47a2a4a6588cc3ea25217449788506f04fcc6dd91de689a173b1db95050bdfd5",
+          "serve_driver.py": "d609bd036730483239b8ffb4826a83b2bb098186c1df7b636f6f3ec8732ab51b",
+          "run_scale_benchmark.sh": "112f54192eb4ed731af5b1fd9e8358c1fb04a652622737ddf0a9486ac09e45c8"
+        },
+        "tuning_env": {
+          "RLFORGE_FUSED_OPS": "",
+          "RLFORGE_FAST_LOGPROB": "1",
+          "RLFORGE_LOGPROB_BWD": "tf32",
+          "RLFORGE_FP8_ALIGN_COMPILE": "1",
+          "RLFORGE_FP8_ALIGN_POINTWISE": "1",
+          "RLFORGE_FP8_ALIGN_BACKWARD": "1",
+          "VLLM_DISABLE_COMPILE_CACHE": "1",
+          "RLFORGE_FP8_GRAPHS": "0",
+          "RLFORGE_FP8_HEAD_GRAPH": "0",
+          "RLFORGE_LOGPROB_TOK_CHUNK": "",
+          "RLFORGE_LOGPROB_VOCAB_CHUNK": "",
+          "RLFORGE_SB_ACT_GB": "128",
+          "RLFORGE_SB_MEM_FULL_KB": "128",
+          "RLFORGE_SB_MEM_CKPT_KB": "4.7",
+          "RLFORGE_SB_MEM_BASE_KB": "16"
+        },
+        "precision_manifest": {
+          "master": "float32",
+          "optimizer": "float32 Adam",
+          "compute": "native FP8 PTPC forward and E5M2/E4M3 backward; BF16/FP32 sensitive operations",
+          "rollout": "poor_rl_fp8 stateless PTPC",
+          "kv": "auto/bfloat16"
+        },
+        "started_utc": "2026-10-05T05:07:19.960972+00:00",
+        "ended_utc": "2026-10-05T05:21:59.142059+00:00",
+        "trainer_exit_code": 0,
+        "master_header": {
+          "saved_files": 1,
+          "tensor_count": 320,
+          "dtype_counts": {
+            "F32": 320
+          }
+        },
+        "stop_reason": "completed",
+        "changed_source_sha256": {
+          "rlforge.fp8": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+          "rlforge.fp8_alignment": "736108537b40ebb3ebbea16d9195a7078f23d92cd01237ce42d01a28b32e5d75",
+          "rlforge.trainer": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb"
+        }
+      }
+    ]
+  },
+  "e2e_saved_master_evidence": [
+    {
+      "run_name": "bf16_runtime3",
+      "trainer_exit_code": 0,
+      "stop_reason": "completed",
+      "final_tensor_file_count": 1,
+      "dtype_counts": {
+        "F32": 320
+      },
+      "all_saved_tensors_F32": true,
+      "selected_master_update_evidence": {
+        "tensor_identifier": "model.language_model.layers.23.mlp.down_proj.weight",
+        "shape": [
+          1024,
+          3584
+        ],
+        "dtype": "F32",
+        "initial_tensor_sha256": "bba3d70380f3ecc1dc86f0e3062009a9d2ffa920bf754fe06c6a4f8b1eca0808",
+        "final_tensor_sha256": "d4586dc0176efa3ffa8e930b84802a863415b7e308c1ea096b09f5e86ec0bc4f",
+        "changed": true
+      },
+      "metadata_sha256": "f35ec172483065b84ead16bed885b2bce1d1ed2cc366ee99cffc6353c1fc6563",
+      "history_sha256": "4544f6310d4a3bd4036b254b5387b3398c5441d6bb09b7eb0c407b3b468b6bbb",
+      "optimizer_dtype_verified_in_E2E": false,
+      "optimizer_precision_note": "FP32 Adam configured; saved model headers prove master dtype only. Microbenchmark state assertions separate."
+    },
+    {
+      "run_name": "fp8_runtime_cache80_v3",
+      "trainer_exit_code": 0,
+      "stop_reason": "completed",
+      "final_tensor_file_count": 1,
+      "dtype_counts": {
+        "F32": 320
+      },
+      "all_saved_tensors_F32": true,
+      "selected_master_update_evidence": {
+        "tensor_identifier": "model.language_model.layers.23.mlp.down_proj.weight",
+        "shape": [
+          1024,
+          3584
+        ],
+        "dtype": "F32",
+        "initial_tensor_sha256": "bba3d70380f3ecc1dc86f0e3062009a9d2ffa920bf754fe06c6a4f8b1eca0808",
+        "final_tensor_sha256": "1c1ed895aca8305544da83cc53d3a99e5c3f1d83fe4ff8852f1388e9255c04bf",
+        "changed": true
+      },
+      "metadata_sha256": "8e8a8f588d16f7735326ddfbd4b470b6f0c1beb1226c4d53b7e3e1782a5ba5b3",
+      "history_sha256": "34a14611911ba841ad86c5d365801e8128cce440517b1e32f0a6b34eb59d71e7",
+      "optimizer_dtype_verified_in_E2E": false,
+      "optimizer_precision_note": "FP32 Adam configured; saved model headers prove master dtype only. Microbenchmark state assertions separate."
+    },
+    {
+      "run_name": "fp8_compact128_v1",
+      "trainer_exit_code": 0,
+      "stop_reason": "completed",
+      "final_tensor_file_count": 1,
+      "dtype_counts": {
+        "F32": 320
+      },
+      "all_saved_tensors_F32": true,
+      "selected_master_update_evidence": {
+        "tensor_identifier": "model.language_model.layers.23.mlp.down_proj.weight",
+        "shape": [
+          1024,
+          3584
+        ],
+        "dtype": "F32",
+        "initial_tensor_sha256": "bba3d70380f3ecc1dc86f0e3062009a9d2ffa920bf754fe06c6a4f8b1eca0808",
+        "final_tensor_sha256": "82dd2278b8c7665173147633278adfa78846e7c8beec70e9e2486f52844c19b9",
+        "changed": true
+      },
+      "metadata_sha256": "2dc903e4334e1d22eee317451b4f499ec8588ff91e943f7488673da46f5dc217",
+      "history_sha256": "607a647ca540883568489e80ac0de6d0309a0ac64c9daf1b95a732f3359ab77e",
+      "optimizer_dtype_verified_in_E2E": false,
+      "optimizer_precision_note": "FP32 Adam configured; saved model headers prove master dtype only. Microbenchmark state assertions separate."
+    },
+    {
+      "run_name": "fp8_compact128_v2",
+      "trainer_exit_code": 0,
+      "stop_reason": "completed",
+      "final_tensor_file_count": 1,
+      "dtype_counts": {
+        "F32": 320
+      },
+      "all_saved_tensors_F32": true,
+      "selected_master_update_evidence": {
+        "tensor_identifier": "model.language_model.layers.23.mlp.down_proj.weight",
+        "shape": [
+          1024,
+          3584
+        ],
+        "dtype": "F32",
+        "initial_tensor_sha256": "bba3d70380f3ecc1dc86f0e3062009a9d2ffa920bf754fe06c6a4f8b1eca0808",
+        "final_tensor_sha256": "349e21e043752b54ec2c12fac283c75cb5597ee8bc562c48cb5d7a01fa7673a8",
+        "changed": true
+      },
+      "metadata_sha256": "a7c6e5167ff83e81d18eba2acd0c34895b945ee23b0b5f8e6cfac3f8c30eaec6",
+      "history_sha256": "e6a931390bf96cf30fd4363198b424c8a3a39f4185e303553d975c2c42714d94",
+      "optimizer_dtype_verified_in_E2E": false,
+      "optimizer_precision_note": "FP32 Adam configured; saved model headers prove master dtype only. Microbenchmark state assertions separate."
+    },
+    {
+      "run_name": "fp8_compact128_v3",
+      "trainer_exit_code": 0,
+      "stop_reason": "completed",
+      "final_tensor_file_count": 1,
+      "dtype_counts": {
+        "F32": 320
+      },
+      "all_saved_tensors_F32": true,
+      "selected_master_update_evidence": {
+        "tensor_identifier": "model.language_model.layers.23.mlp.down_proj.weight",
+        "shape": [
+          1024,
+          3584
+        ],
+        "dtype": "F32",
+        "initial_tensor_sha256": "bba3d70380f3ecc1dc86f0e3062009a9d2ffa920bf754fe06c6a4f8b1eca0808",
+        "final_tensor_sha256": "5d149b1e9337a7772620f68ad17649d6db66db0e2d9ef997576079502ee2e455",
+        "changed": true
+      },
+      "metadata_sha256": "14fe45111fa5bf6e38bb9ccd27b0240bf46ba0e4ce16c05ceade43d162e22d00",
+      "history_sha256": "4a0f102b7c5df3556211e628d89d6f6422d5a5465959365f558e1307491ef9e1",
+      "optimizer_dtype_verified_in_E2E": false,
+      "optimizer_precision_note": "FP32 Adam configured; saved model headers prove master dtype only. Microbenchmark state assertions separate."
+    }
+  ],
+  "bugfix_evidence": {
+    "cache_bug": {
+      "finding": "Fused AdamW changed FP32 masters without incrementing parameter _version; version-keyed Linear/head caches stayed stale. Ordinary AdamW refreshed caches.",
+      "optimizer_runtime_default": "adamw_torch_fused verified by parent",
+      "before_source_sha256": "86c8b738f14b1e4f204db10741ba7fbe06f4fff302d1f614cb353934e21b96bc",
+      "hook_gate_source_sha256": "7b579ebbd73c2f15267bd8182598d2a3639da7b700eab1b0fd47d3115559e6b1",
+      "head_source_sha256": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f",
+      "before": [
+        {
+          "scope": "linear",
+          "fused": false,
+          "before_version": 1,
+          "after_version": 3,
+          "master_changed": true,
+          "cache_refreshed": true,
+          "cache_bytes_fresh": true,
+          "master_dtype": "torch.float32",
+          "gradient_dtype": "torch.float32",
+          "adam_dtypes": [
+            "torch.float32",
+            "torch.float32"
+          ]
+        },
+        {
+          "scope": "head",
+          "fused": false,
+          "before_version": 0,
+          "after_version": 2,
+          "master_changed": true,
+          "cache_refreshed": true,
+          "cache_bytes_fresh": true,
+          "master_dtype": "torch.float32",
+          "gradient_dtype": "torch.float32",
+          "adam_dtypes": [
+            "torch.float32",
+            "torch.float32"
+          ]
+        },
+        {
+          "scope": "linear",
+          "fused": true,
+          "before_version": 1,
+          "after_version": 1,
+          "master_changed": true,
+          "cache_refreshed": false,
+          "cache_bytes_fresh": false,
+          "master_dtype": "torch.float32",
+          "gradient_dtype": "torch.float32",
+          "adam_dtypes": [
+            "torch.float32",
+            "torch.float32"
+          ]
+        },
+        {
+          "scope": "head",
+          "fused": true,
+          "before_version": 0,
+          "after_version": 0,
+          "master_changed": true,
+          "cache_refreshed": false,
+          "cache_bytes_fresh": false,
+          "master_dtype": "torch.float32",
+          "gradient_dtype": "torch.float32",
+          "adam_dtypes": [
+            "torch.float32",
+            "torch.float32"
+          ]
+        }
+      ],
+      "after_hook": [
+        {
+          "scope": "linear",
+          "fused": false,
+          "before_version": 1,
+          "after_version": 4,
+          "master_changed": true,
+          "cache_refreshed": true,
+          "cache_bytes_fresh": true,
+          "master_dtype": "torch.float32",
+          "gradient_dtype": "torch.float32",
+          "adam_dtypes": [
+            "torch.float32",
+            "torch.float32"
+          ]
+        },
+        {
+          "scope": "head",
+          "fused": false,
+          "before_version": 0,
+          "after_version": 3,
+          "master_changed": true,
+          "cache_refreshed": true,
+          "cache_bytes_fresh": true,
+          "master_dtype": "torch.float32",
+          "gradient_dtype": "torch.float32",
+          "adam_dtypes": [
+            "torch.float32",
+            "torch.float32"
+          ]
+        },
+        {
+          "scope": "linear",
+          "fused": true,
+          "before_version": 1,
+          "after_version": 2,
+          "master_changed": true,
+          "cache_refreshed": true,
+          "cache_bytes_fresh": true,
+          "master_dtype": "torch.float32",
+          "gradient_dtype": "torch.float32",
+          "adam_dtypes": [
+            "torch.float32",
+            "torch.float32"
+          ]
+        },
+        {
+          "scope": "head",
+          "fused": true,
+          "before_version": 0,
+          "after_version": 1,
+          "master_changed": true,
+          "cache_refreshed": true,
+          "cache_bytes_fresh": true,
+          "master_dtype": "torch.float32",
+          "gradient_dtype": "torch.float32",
+          "adam_dtypes": [
+            "torch.float32",
+            "torch.float32"
+          ]
+        }
+      ],
+      "gate_sha256": {
+        "optimizer_cache_gate.json": "eb322553528b92b30687dc582f977512dbe8f2fbd2f3eae7b1e652e106193afc",
+        "optimizer_cache_hook_gate.json": "225ae8d2c0bfed1ec97d286251d7bbace27be25de95d12d32b40be3572bf1204"
+      },
+      "boundary": "This is an isolated actual optimizer-step gate; E2E regression attribution will be checked on repaired run."
+    },
+    "runtime_quantization": {
+      "finding": "Compile-time token counts specialized fresh real batch lengths; fixed-shape warmed probes hid compilation cost. Token dimensions are now runtime, feature dimensions remain compile-time.",
+      "transpose_fix": "Triton3.7.1 FP8 layout reuse failed valid transpose bytes with runtime padded M; FP32 transpose plus identity inline assembly barrier preserves bytes and padding.",
+      "source_sha256": {
+        "baseline": "86c8b738f14b1e4f204db10741ba7fbe06f4fff302d1f614cb353934e21b96bc",
+        "candidate": "f0c852f13ef81fd1600406a2879028efab50c4c216a131b83c968112e671c957"
+      },
+      "final_comment_only_source_sha256": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+      "final_AST_equal_to_gated_source": true,
+      "device": "NVIDIA H200",
+      "torch": "2.13.0+cu130",
+      "triton": "3.7.1",
+      "quantization_byte_scale_padding_cases": 72,
+      "all_quantization_equal": true,
+      "actual_linear_forward_loss_dgrad_wgrad_master_update_cases": 6,
+      "all_linear_equal": true,
+      "cold_shapes": [
+        {
+          "rows": 33001,
+          "baseline": {
+            "cold_ms": 303.9834778755903,
+            "warm_ms": 0.2199951559305191,
+            "new_compiled_variants": {
+              "_amax_kernel": 1,
+              "_amax_scale_kernel": 1,
+              "_quantize_tensor_kernel": 2,
+              "_quantize_dual_kernel": 1
+            },
+            "cache_variants": {
+              "_amax_kernel": 38,
+              "_amax_scale_kernel": 26,
+              "_quantize_tensor_kernel": 153,
+              "_quantize_dual_kernel": 73
+            }
+          },
+          "runtime": {
+            "cold_ms": 51.13852210342884,
+            "warm_ms": 0.22391416132450104,
+            "new_compiled_variants": {
+              "_amax_kernel": 0,
+              "_amax_scale_kernel": 1,
+              "_quantize_tensor_kernel": 0,
+              "_quantize_dual_kernel": 0
+            },
+            "cache_variants": {
+              "_amax_kernel": 2,
+              "_amax_scale_kernel": 20,
+              "_quantize_tensor_kernel": 26,
+              "_quantize_dual_kernel": 12
+            }
+          }
+        },
+        {
+          "rows": 33002,
+          "baseline": {
+            "cold_ms": 267.5731712952256,
+            "warm_ms": 0.2206750214099884,
+            "new_compiled_variants": {
+              "_amax_kernel": 1,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 2,
+              "_quantize_dual_kernel": 1
+            },
+            "cache_variants": {
+              "_amax_kernel": 39,
+              "_amax_scale_kernel": 26,
+              "_quantize_tensor_kernel": 155,
+              "_quantize_dual_kernel": 74
+            }
+          },
+          "runtime": {
+            "cold_ms": 0.2367943525314331,
+            "warm_ms": 0.21231546998023987,
+            "new_compiled_variants": {
+              "_amax_kernel": 0,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 0,
+              "_quantize_dual_kernel": 0
+            },
+            "cache_variants": {
+              "_amax_kernel": 2,
+              "_amax_scale_kernel": 20,
+              "_quantize_tensor_kernel": 26,
+              "_quantize_dual_kernel": 12
+            }
+          }
+        },
+        {
+          "rows": 33003,
+          "baseline": {
+            "cold_ms": 259.1004092246294,
+            "warm_ms": 0.21991506218910217,
+            "new_compiled_variants": {
+              "_amax_kernel": 1,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 2,
+              "_quantize_dual_kernel": 1
+            },
+            "cache_variants": {
+              "_amax_kernel": 40,
+              "_amax_scale_kernel": 26,
+              "_quantize_tensor_kernel": 157,
+              "_quantize_dual_kernel": 75
+            }
+          },
+          "runtime": {
+            "cold_ms": 0.2395138144493103,
+            "warm_ms": 0.21755509078502655,
+            "new_compiled_variants": {
+              "_amax_kernel": 0,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 0,
+              "_quantize_dual_kernel": 0
+            },
+            "cache_variants": {
+              "_amax_kernel": 2,
+              "_amax_scale_kernel": 20,
+              "_quantize_tensor_kernel": 26,
+              "_quantize_dual_kernel": 12
+            }
+          }
+        },
+        {
+          "rows": 33007,
+          "baseline": {
+            "cold_ms": 256.2102358788252,
+            "warm_ms": 0.22427458316087723,
+            "new_compiled_variants": {
+              "_amax_kernel": 1,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 2,
+              "_quantize_dual_kernel": 1
+            },
+            "cache_variants": {
+              "_amax_kernel": 41,
+              "_amax_scale_kernel": 26,
+              "_quantize_tensor_kernel": 159,
+              "_quantize_dual_kernel": 76
+            }
+          },
+          "runtime": {
+            "cold_ms": 0.2325950190424919,
+            "warm_ms": 0.21651387214660645,
+            "new_compiled_variants": {
+              "_amax_kernel": 0,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 0,
+              "_quantize_dual_kernel": 0
+            },
+            "cache_variants": {
+              "_amax_kernel": 2,
+              "_amax_scale_kernel": 20,
+              "_quantize_tensor_kernel": 26,
+              "_quantize_dual_kernel": 12
+            }
+          }
+        },
+        {
+          "rows": 33008,
+          "baseline": {
+            "cold_ms": 260.9880054369569,
+            "warm_ms": 0.2140747383236885,
+            "new_compiled_variants": {
+              "_amax_kernel": 1,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 2,
+              "_quantize_dual_kernel": 1
+            },
+            "cache_variants": {
+              "_amax_kernel": 42,
+              "_amax_scale_kernel": 26,
+              "_quantize_tensor_kernel": 161,
+              "_quantize_dual_kernel": 77
+            }
+          },
+          "runtime": {
+            "cold_ms": 0.23031514137983322,
+            "warm_ms": 0.21359510719776154,
+            "new_compiled_variants": {
+              "_amax_kernel": 0,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 0,
+              "_quantize_dual_kernel": 0
+            },
+            "cache_variants": {
+              "_amax_kernel": 2,
+              "_amax_scale_kernel": 20,
+              "_quantize_tensor_kernel": 26,
+              "_quantize_dual_kernel": 12
+            }
+          }
+        },
+        {
+          "rows": 33009,
+          "baseline": {
+            "cold_ms": 295.94574589282274,
+            "warm_ms": 0.21791551262140274,
+            "new_compiled_variants": {
+              "_amax_kernel": 1,
+              "_amax_scale_kernel": 1,
+              "_quantize_tensor_kernel": 2,
+              "_quantize_dual_kernel": 1
+            },
+            "cache_variants": {
+              "_amax_kernel": 43,
+              "_amax_scale_kernel": 27,
+              "_quantize_tensor_kernel": 163,
+              "_quantize_dual_kernel": 78
+            }
+          },
+          "runtime": {
+            "cold_ms": 0.24395529180765152,
+            "warm_ms": 0.21299533545970917,
+            "new_compiled_variants": {
+              "_amax_kernel": 0,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 0,
+              "_quantize_dual_kernel": 0
+            },
+            "cache_variants": {
+              "_amax_kernel": 2,
+              "_amax_scale_kernel": 20,
+              "_quantize_tensor_kernel": 26,
+              "_quantize_dual_kernel": 12
+            }
+          }
+        },
+        {
+          "rows": 33015,
+          "baseline": {
+            "cold_ms": 255.47181442379951,
+            "warm_ms": 0.22743456065654755,
+            "new_compiled_variants": {
+              "_amax_kernel": 1,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 2,
+              "_quantize_dual_kernel": 1
+            },
+            "cache_variants": {
+              "_amax_kernel": 44,
+              "_amax_scale_kernel": 27,
+              "_quantize_tensor_kernel": 165,
+              "_quantize_dual_kernel": 79
+            }
+          },
+          "runtime": {
+            "cold_ms": 0.24335552006959915,
+            "warm_ms": 0.21987315267324448,
+            "new_compiled_variants": {
+              "_amax_kernel": 0,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 0,
+              "_quantize_dual_kernel": 0
+            },
+            "cache_variants": {
+              "_amax_kernel": 2,
+              "_amax_scale_kernel": 20,
+              "_quantize_tensor_kernel": 26,
+              "_quantize_dual_kernel": 12
+            }
+          }
+        },
+        {
+          "rows": 33016,
+          "baseline": {
+            "cold_ms": 258.39954521507025,
+            "warm_ms": 0.21251477301120758,
+            "new_compiled_variants": {
+              "_amax_kernel": 1,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 2,
+              "_quantize_dual_kernel": 1
+            },
+            "cache_variants": {
+              "_amax_kernel": 45,
+              "_amax_scale_kernel": 27,
+              "_quantize_tensor_kernel": 167,
+              "_quantize_dual_kernel": 80
+            }
+          },
+          "runtime": {
+            "cold_ms": 0.24659465998411179,
+            "warm_ms": 0.2133948728442192,
+            "new_compiled_variants": {
+              "_amax_kernel": 0,
+              "_amax_scale_kernel": 0,
+              "_quantize_tensor_kernel": 0,
+              "_quantize_dual_kernel": 0
+            },
+            "cache_variants": {
+              "_amax_kernel": 2,
+              "_amax_scale_kernel": 20,
+              "_quantize_tensor_kernel": 26,
+              "_quantize_dual_kernel": 12
+            }
+          }
+        }
+      ],
+      "cold_baseline_median_ms": 260.04420733079314,
+      "runtime_after_first_cold_median_ms": 0.2395138144493103,
+      "runtime_first_power2_compile_ms": 51.13852210342884,
+      "zero_new_variants_after_first": true,
+      "gate_sha256": "40b661d819f33bf7e3c556faa00a256121f96b7cbea55649e62d7e7c6ee38bb5"
+    },
+    "serving_AOT_cache_dtype": {
+      "finding": "v2 reused cached BF16 embedding kernel while current tied embedding storage is FP32. Source metadata omitted external plugin constructor, so its dtype upgrade was not invalidated.",
+      "cached_artifact_sha256": "2651ad5d7283a55e4a266218d961dcee60691350c9a27071aefb4708f86336b1",
+      "cached_artifact_mtime_utc": "2026-10-05T02:51:50.842208+00:00",
+      "cached_embedding_operand_dtype": "bf16",
+      "current_embedding_storage_dtype": "float32",
+      "external_plugin_constructor_in_cached_source_metadata": false,
+      "guards_evaluated_by_default": false,
+      "audit_method": "pickletools opcodes and recursive byte inspection; no unpickling",
+      "evidence_sha256": {
+        "aot_v2_source_audit.json": "562cb26a962d5db9be8906dd77af03a645632af56a0520f6297500ac5d8e533a",
+        "aot_embedded_signatures.json": "6b30c689515ad183e35ba779711014462193ea42535f6468384474dab2569de9",
+        "aot_embedding_kernel_audit.json": "a238db1fca6c690e4fd1d6a8d46d78c2da4143bcd67ead84929492aed7622460"
+      },
+      "controlled_test": {
+        "same32_source_hashes": true,
+        "same_inputs_and_hyperparameters": true,
+        "serving_CUDA_graphs_retained": true,
+        "changes": [
+          "fresh vLLM cache directory",
+          "VLLM_DISABLE_COMPILE_CACHE=1"
+        ],
+        "v2_direct_AOT_load_ranks": 4,
+        "v3_direct_AOT_load_ranks": 0,
+        "v3_cache_disabled_log_confirmed": true,
+        "v2_compile_s": 0.38,
+        "v3_compile_and_initial_profiling_warmup_s": 17.07,
+        "v2_first_step_LR": 0,
+        "v2_first_KL": 2.193,
+        "v2_first_logrho_P90": 2.255,
+        "v2_first_entropy": 9.285,
+        "v3_first_step_LR": 0,
+        "v3_first_KL": 0.009915,
+        "v3_first_logrho_P90": 0.01442,
+        "v3_first_entropy": 0.6975,
+        "boundary": "Fresh-disabled cache restores first-step generation/logprob behavior and20steps complete without priorKL/p90blowup. Persistenttrain/decodefloor remains.",
+        "v3_completed_steps": 20,
+        "v3_final_KL": 0.01013041113037616,
+        "v3_final_logrho_P90": 0.014617781504057348
+      }
+    }
+  },
+  "excluded_bootstrap_attempts": [
+    {
+      "run_name": "fp8_runtime_cache80",
+      "status": "stopped_source_mismatch",
+      "reason": "Bootstrap copied obsolete serving source missing previously validated FP32 tied embedding/head handling; excluded from performance comparisons. Restarted with all source hashes aligned except intentional fp8 and trainer repairs.",
+      "obsolete_serving_sha256": "b9cffe59250251a1862b235ef14a63c99d1a506e1019c3bfcf1a1b83848cb9c7",
+      "restored_serving_sha256": "b15ccea1083f5913b423004df219f668337463c314cadc9f94e4c789c25704c0"
+    }
+  ],
+  "comparisons": {
+    "repaired_v3_vs_current_BF16_total_throughput_ratio": 1.0179548010109716,
+    "repaired_v3_vs_historical_BF16_total_throughput_ratio": 0.986996136858218,
+    "comparison_boundary": "Exactoptimizersteps4-20 trainedcompletion tokens divided by summedwalltime; stochasticrollout batches differ while inputs and hyperparameters align.20steps do not establish long-runlearning quality or decodeequivalence.",
+    "compact128_vs_repaired_v3_total_throughput_ratio": 1.1013380648052027,
+    "compact128_vs_current_BF16_total_throughput_ratio": 1.1211123706045887,
+    "compact128_vs_historical_BF16_total_throughput_ratio": 1.0870164153376407,
+    "compact128_boundary": "One 20-step run per arm; generated tokens and trained completion counts differ. No statistical significance, strict train/decode equality or long-run RL quality claim.",
+    "detached_compact128_v2_vs_current_BF16_observed_throughput_ratio": 1.0969185337604765,
+    "detached_compact128_v2_vs_repaired_v3_observed_throughput_ratio": 1.0775709615702806,
+    "detached_compact128_v2_vs_compact128_v1_observed_throughput_ratio": 0.9784197931639403,
+    "detached_compact128_v2_vs_historical_BF16_observed_throughput_ratio": 1.0635583762604623,
+    "detached_compact128_v2_boundary": "Same configured contract but external judge failures54.46% versusv1 8.84%; observed throughput ratios are not clean causal performance evidence or matched reward quality.",
+    "contiguous_compact128_v3_vs_current_BF16_observed_throughput_ratio": 1.1769186471887934,
+    "contiguous_compact128_v3_vs_repaired_v3_observed_throughput_ratio": 1.1561600240206622,
+    "contiguous_compact128_v3_vs_compact128_v1_observed_throughput_ratio": 1.049777594153305,
+    "contiguous_compact128_v3_vs_compact128_v2_observed_throughput_ratio": 1.0729316817667938,
+    "contiguous_compact128_v3_vs_historical_BF16_observed_throughput_ratio": 1.1411254772982982,
+    "contiguous_compact128_v3_boundary": "Same configured20-step contract; generated completions and realized external judge outcomes differ. v2 high judge failures are separately documented. These are observed throughput ratios without statistical-significance or long-run quality evidence."
+  },
+  "compact_backward": {
+    "scope": "Fixed G32 forward/backward plus frozen BF16 reference, excluding rollout and optimizer timing",
+    "source_sha256": {
+      "fp8.py": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+      "fp8_alignment.py": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d",
+      "trainer.py": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb",
+      "fast_logprob.py": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f"
+    },
+    "token_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+    "completion_tokens": 58248,
+    "model_gate_evidence_sha256": "48f36bcb783a012760b25893e92fb9a1873c6dcc2f4b94133a5c119d6bfa0c7d",
+    "model_gate_script_sha256": "8fa4f1677bf8e0676f5c5ebd66bfd9e94940b0f7246f43818d42a40444932c3e",
+    "model_rows": [
+      {
+        "mode": "0",
+        "budget_gib": 80,
+        "samples_ms": [
+          2751.777846366167,
+          2753.025776706636,
+          2753.538364544511
+        ],
+        "median_ms": 2753.025776706636,
+        "peak_gib": 85.55160713195801,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.0,
+          "cosine": 1.0,
+          "norm_ratio": 1.0
+        },
+        "compared_gradient_tensor_count": 320,
+        "parameter_gradient_relative_l2_median": 0.0,
+        "parameter_gradient_relative_l2_max": 0.0,
+        "parameter_gradient_cosine_median": 1.0,
+        "parameter_gradient_cosine_min": 1.0
+      },
+      {
+        "mode": "1",
+        "budget_gib": 80,
+        "samples_ms": [
+          2567.768677137792,
+          2568.872611038387,
+          2567.309247329831
+        ],
+        "median_ms": 2567.768677137792,
+        "peak_gib": 75.16080141067505,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.13105213482710806,
+          "cosine": 0.9914309958194697,
+          "norm_ratio": 1.0019234543735251
+        },
+        "compared_gradient_tensor_count": 320,
+        "parameter_gradient_relative_l2_median": 0.11734875159419088,
+        "parameter_gradient_relative_l2_max": 0.31168202074119117,
+        "parameter_gradient_cosine_median": 0.9933380357978687,
+        "parameter_gradient_cosine_min": 0.9670027620937038
+      },
+      {
+        "mode": "0",
+        "budget_gib": 80,
+        "samples_ms": [
+          2752.6728650555015,
+          2752.9963767156005,
+          2755.7954313233495
+        ],
+        "median_ms": 2752.9963767156005,
+        "peak_gib": 86.88331079483032,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.13029495778644223,
+          "cosine": 0.9915182242548563,
+          "norm_ratio": 1.0007455197919841
+        },
+        "compared_gradient_tensor_count": 320,
+        "parameter_gradient_relative_l2_median": 0.11230746097606376,
+        "parameter_gradient_relative_l2_max": 0.3066907640840944,
+        "parameter_gradient_cosine_median": 0.9938761609098608,
+        "parameter_gradient_cosine_min": 0.9638970310948606
+      },
+      {
+        "mode": "1",
+        "budget_gib": 80,
+        "samples_ms": [
+          2571.764503605664,
+          2569.1763246431947,
+          2569.0194480121136
+        ],
+        "median_ms": 2569.1763246431947,
+        "peak_gib": 75.39841604232788,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.13049568867493125,
+          "cosine": 0.9914891014146828,
+          "norm_ratio": 1.000419140721323
+        },
+        "compared_gradient_tensor_count": 320,
+        "parameter_gradient_relative_l2_median": 0.1138183659866265,
+        "parameter_gradient_relative_l2_max": 0.31082678612970116,
+        "parameter_gradient_cosine_median": 0.9935073462073487,
+        "parameter_gradient_cosine_min": 0.9669295221998516
+      },
+      {
+        "mode": "1",
+        "budget_gib": 112,
+        "samples_ms": [
+          2458.1954833120108,
+          2458.4609186276793,
+          2458.1948053091764
+        ],
+        "median_ms": 2458.1954833120108,
+        "peak_gib": 103.4968376159668,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.13057615520603702,
+          "cosine": 0.9914678523515957,
+          "norm_ratio": 0.9991241510101488
+        },
+        "compared_gradient_tensor_count": 320,
+        "parameter_gradient_relative_l2_median": 0.11345307956481451,
+        "parameter_gradient_relative_l2_max": 0.27627959519121054,
+        "parameter_gradient_cosine_median": 0.9936323191341463,
+        "parameter_gradient_cosine_min": 0.9640134155562654
+      }
+    ],
+    "fp32_master_gradient_adam_update": true,
+    "gradient_boundary": "Forward loss and token logprobs are exact. Full gradients are not bit exact: candidate relative L2 0.13105/cosine 0.99143 versus repeated baseline 0.13029/0.99152. Observed variation is comparable to baseline repetition, consistent with FA3 nondeterminism; this is not a deterministic equivalence proof.",
+    "ddp_scope": "Two ranks, two microbatches with no_sync, actual fused FP32 Adam update and FP8 cache invalidation.",
+    "ddp_rows": [
+      {
+        "rank": 0,
+        "world_size": 2,
+        "two_microbatch_no_sync": true,
+        "allreduce_exact": true,
+        "fp32_master_grad_adam": true,
+        "fused_optimizer_cache_invalidated": true,
+        "selected_update_max": 2.000480890274048e-06,
+        "source_sha256": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d",
+        "loss": 0.3333093225955963,
+        "evidence_sha256": "a9f55f455e6e69da1eefbcb9ba86f20c7568bcb49ae32f4c2254d02bcf2a41f5"
+      },
+      {
+        "rank": 1,
+        "world_size": 2,
+        "two_microbatch_no_sync": true,
+        "allreduce_exact": true,
+        "fp32_master_grad_adam": true,
+        "fused_optimizer_cache_invalidated": true,
+        "selected_update_max": 2.000480890274048e-06,
+        "source_sha256": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d",
+        "loss": 0.1863357573747635,
+        "evidence_sha256": "731eaf90bb0da962b500c199ad25d06e8c00f9adff4a995163705d0c39910bdc"
+      }
+    ],
+    "memory_budget_scope": "Fixed G32 trainer including BF16 reference; no rollout, judge or optimizer timing",
+    "memory_budget_evidence_sha256": "97d60c9a16a5dad1771b7946fe344fd0e086d3656bd375b5417f45098ee639b7",
+    "memory_budget_script_sha256": "2f4d776bfae503365b7a7b6b3cb69fc970a0cfe699757480960b0812e3e6700c",
+    "allocator": "expandable_segments:True",
+    "memory_budget_rows": [
+      {
+        "budget_gib": 112,
+        "checkpoint_layers": [
+          11
+        ],
+        "samples_ms": [
+          2457.339024171233,
+          2455.9553368017077,
+          2456.192131154239
+        ],
+        "median_ms": 2456.192131154239,
+        "peak_gib": 101.66495609283447,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "selected_gradient_tensor_count": 11,
+        "selected_gradient_max_relative_l2": 0.0,
+        "selected_gradient_min_cosine": 0.9999999999998399
+      },
+      {
+        "budget_gib": 128,
+        "checkpoint_layers": [
+          9
+        ],
+        "samples_ms": [
+          2649.694916792214,
+          2394.824009388685,
+          2396.6553658246994
+        ],
+        "median_ms": 2396.6553658246994,
+        "peak_gib": 116.18695974349976,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "selected_gradient_tensor_count": 11,
+        "selected_gradient_max_relative_l2": 0.00017391406348610665,
+        "selected_gradient_min_cosine": 0.9999999848906155
+      },
+      {
+        "budget_gib": 112,
+        "checkpoint_layers": [
+          11
+        ],
+        "samples_ms": [
+          2456.842196173966,
+          2457.6438181102276,
+          2459.119782783091
+        ],
+        "median_ms": 2457.6438181102276,
+        "peak_gib": 102.09921407699585,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "selected_gradient_tensor_count": 11,
+        "selected_gradient_max_relative_l2": 0.00019229035208208928,
+        "selected_gradient_min_cosine": 0.9999999815470964
+      }
+    ],
+    "memory_budget_fp32_update_passed": true,
+    "production_flag": "RLFORGE_FP8_ALIGN_BACKWARD",
+    "default_enabled": false,
+    "causal_boundary": "Compact backward preserves the existing forward; the 128 GiB E2E candidate also changes activation budget from 80 to 128 GiB. Its final total-throughput gain cannot be attributed to backward alone.",
+    "E2E_source_delta_from_v3": {
+      "rlforge.fp8_alignment": {
+        "prior": "6db8909ebf4c9c52c05067a7d130f777a76492216cf028d6f2221a2a31f21fa7",
+        "candidate": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d"
+      }
+    },
+    "E2E_settings_delta_from_v3": {
+      "RLFORGE_SB_ACT_GB": [
+        "80",
+        "128"
+      ],
+      "RLFORGE_FP8_ALIGN_BACKWARD": [
+        "0/default",
+        "1"
+      ]
+    },
+    "AOT_cache_boundary": "VLLM_DISABLE_COMPILE_CACHE=1 appears in the new manifest; it was already enabled in completed v3 server logs. AOT cache policy is unchanged.",
+    "AOT_cache_runtime_evidence": {
+      "evidence_sha256": "67b8a1e9a04ba8ed80be7c551a6939f2c483575ecf81a12f31f40b98a0afedda",
+      "runs": [
+        {
+          "run_name": "fp8_runtime_cache80_v3",
+          "manifest_cache_disabled": null,
+          "server_log_sha256": "20c625393e737c53b36e7579fb02805617269313aeb4933a15cf3c99007b89b1",
+          "cache_disabled": 1,
+          "AOT_direct_load": 0,
+          "CUDA_graph": 816
+        },
+        {
+          "run_name": "fp8_compact128_v1",
+          "manifest_cache_disabled": "1",
+          "server_log_sha256": "79dff01073d4512f86d9f1409673ae59e0717d2343cf578a24ffe151ceb489de",
+          "cache_disabled": 1,
+          "AOT_direct_load": 0,
+          "CUDA_graph": 802
+        }
+      ],
+      "boundary": "Keyword counts confirm startup cache-disabled messages, absence of direct AOT loads and CUDA graph activity; counts are not speed measurements."
+    },
+    "E2E_frozen_source_snapshot": {
+      "count": 32,
+      "all_match": true,
+      "evidence_sha256": "b42da9c566de7c7d8df30b2106cf2f832545d4ea734ad66f4addd18826c5c6bc"
+    }
+  },
+  "detached_backward_followup": {
+    "schema": "poor-rl-detached-backward-CPU-evidence-v1",
+    "created_utc": "2026-10-05T04:31:51.429724+00:00",
+    "source_sha256": {
+      "rlforge.fp8_alignment": "f613be41e4b9411b4c586b89de85c524aa970088c12beb79148ddbeaecb57b34",
+      "tests.test_fp8_alignment": "3aa49d050df29a5757955eb0e5d47cccf455a9da4b50ffb14e31b029d631193f"
+    },
+    "previous_E2E_v1_alignment_sha256": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d",
+    "scope": "CPU tests with a graph-counting Dynamo backend; no CUDA, Inductor or E2E throughput assertion.",
+    "CPU_test_selection": "test_compact_backward_reuses_graph_across_original_base_shapes",
+    "test_kinds": [
+      "rms",
+      "gated_rms",
+      "qk_norm"
+    ],
+    "original_shapes": [
+      [
+        1,
+        17,
+        128
+      ],
+      [
+        2,
+        19,
+        128
+      ],
+      [
+        3,
+        23,
+        128
+      ],
+      [
+        1,
+        17,
+        8,
+        128
+      ],
+      [
+        3,
+        19,
+        8,
+        128
+      ]
+    ],
+    "passed": 3,
+    "deselected": 34,
+    "exit_code": 0,
+    "test_log_sha256": "831446686a6d8fa38c2df2904b08231a88cd8cbcd6e125414b0d1eb66619190a",
+    "python_environment": {
+      "torch": "2.13.0",
+      "pytest": "9.1.1"
+    },
+    "assertions": [
+      "All flattened activation, normalization and output-gradient inputs have _base=None.",
+      "Each of the three backward functions uses one dynamic graph across all five original shapes."
+    ],
+    "backward_detach_call_counts": {
+      "_RMS": 3,
+      "_GatedRMS": 4,
+      "_QKNorm": 6
+    },
+    "GPU_gate_status": "passed_root_owned_fixedG32_model_gate",
+    "E2E_v2_status": "completed_with_stride_compile_fallback_and_judge_failures",
+    "causal_boundary": "The f613 source changes only backward view alias metadata. v1 E2E numbers belong to frozen62f647 source and must not be relabeled as f613 measurements.",
+    "AST_boundary": {
+      "previous_source_sha256": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d",
+      "candidate_source_sha256": "f613be41e4b9411b4c586b89de85c524aa970088c12beb79148ddbeaecb57b34",
+      "identical_after_removing_detach_calls": true,
+      "meaning": "All executable changes are no-argument detach calls; existing forward formulas and backward arithmetic are otherwise AST-identical."
+    },
+    "GPU_model_gate": {
+      "scope": "Fixed G32 forward/backward plus frozen BF16 reference, excluding rollout and optimizer timing",
+      "source_sha256": {
+        "fp8.py": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+        "fp8_alignment.py": "f613be41e4b9411b4c586b89de85c524aa970088c12beb79148ddbeaecb57b34",
+        "trainer.py": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb",
+        "fast_logprob.py": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f"
+      },
+      "script_sha256": "8fa4f1677bf8e0676f5c5ebd66bfd9e94940b0f7246f43818d42a40444932c3e",
+      "token_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+      "completion_tokens": 58248,
+      "artifact_sha256": "2b61bc114025f1e5d52b802bb067b6f1c1917523fce321d8ca15f8aaa981f56e",
+      "log_sha256": "67f6e2d0693db784e2502783bd97164235dcc19adef824627e59572962b2ded5",
+      "local_remote_hashes_match": true,
+      "fp32_master_gradient_adam_update": true,
+      "rows": [
+        {
+          "mode": "0",
+          "budget_gib": 80,
+          "samples_ms": [
+            2760.6804370880127,
+            2754.094270989299,
+            2754.7578560188413
+          ],
+          "median_ms": 2754.7578560188413,
+          "peak_gib": 85.37531661987305,
+          "loss": 0.29771000146865845,
+          "loss_difference": 0.0,
+          "sequence_logprob": {
+            "seq_mean": 0.0,
+            "seq_absmean": 0.0,
+            "seq_p99": 0.0,
+            "seq_max": 0.0,
+            "tok_absmean": 0.0,
+            "tok_max": 0.0
+          },
+          "aggregate_gradient": {
+            "relative_l2": 0.0,
+            "cosine": 1.0,
+            "norm_ratio": 1.0
+          },
+          "compared_gradient_tensors": 320,
+          "parameter_gradient_relative_l2_max": 0.0,
+          "parameter_gradient_cosine_min": 1.0
+        },
+        {
+          "mode": "1",
+          "budget_gib": 80,
+          "samples_ms": [
+            2491.121153347194,
+            2491.760457865894,
+            2490.100816823542
+          ],
+          "median_ms": 2491.121153347194,
+          "peak_gib": 74.68972826004028,
+          "loss": 0.29771000146865845,
+          "loss_difference": 0.0,
+          "sequence_logprob": {
+            "seq_mean": 0.0,
+            "seq_absmean": 0.0,
+            "seq_p99": 0.0,
+            "seq_max": 0.0,
+            "tok_absmean": 0.0,
+            "tok_max": 0.0
+          },
+          "aggregate_gradient": {
+            "relative_l2": 0.13118885075025402,
+            "cosine": 0.9913961044831237,
+            "norm_ratio": 1.000156831766512
+          },
+          "compared_gradient_tensors": 320,
+          "parameter_gradient_relative_l2_max": 0.2869325835544457,
+          "parameter_gradient_cosine_min": 0.9618330932225069
+        },
+        {
+          "mode": "0",
+          "budget_gib": 80,
+          "samples_ms": [
+            2755.435159429908,
+            2755.1152473315597,
+            2754.4361436739564
+          ],
+          "median_ms": 2755.1152473315597,
+          "peak_gib": 86.23282957077026,
+          "loss": 0.29771000146865845,
+          "loss_difference": 0.0,
+          "sequence_logprob": {
+            "seq_mean": 0.0,
+            "seq_absmean": 0.0,
+            "seq_p99": 0.0,
+            "seq_max": 0.0,
+            "tok_absmean": 0.0,
+            "tok_max": 0.0
+          },
+          "aggregate_gradient": {
+            "relative_l2": 0.13090000493904402,
+            "cosine": 0.9914227378061623,
+            "norm_ratio": 0.9987615336358333
+          },
+          "compared_gradient_tensors": 320,
+          "parameter_gradient_relative_l2_max": 0.2688427065397927,
+          "parameter_gradient_cosine_min": 0.9692541267333832
+        },
+        {
+          "mode": "1",
+          "budget_gib": 80,
+          "samples_ms": [
+            3058.897408656776,
+            2499.245923012495,
+            2499.233082868159
+          ],
+          "median_ms": 2499.245923012495,
+          "peak_gib": 74.52846097946167,
+          "loss": 0.29771000146865845,
+          "loss_difference": 0.0,
+          "sequence_logprob": {
+            "seq_mean": 0.0,
+            "seq_absmean": 0.0,
+            "seq_p99": 0.0,
+            "seq_max": 0.0,
+            "tok_absmean": 0.0,
+            "tok_max": 0.0
+          },
+          "aggregate_gradient": {
+            "relative_l2": 0.13126172097702052,
+            "cosine": 0.9913872604061701,
+            "norm_ratio": 1.0002370995520298
+          },
+          "compared_gradient_tensors": 320,
+          "parameter_gradient_relative_l2_max": 0.2737024379916409,
+          "parameter_gradient_cosine_min": 0.9700812747236904
+        },
+        {
+          "mode": "1",
+          "budget_gib": 112,
+          "samples_ms": [
+            2405.864750035107,
+            2405.848271213472,
+            2406.5720941871405
+          ],
+          "median_ms": 2405.864750035107,
+          "peak_gib": 102.09936666488647,
+          "loss": 0.29771000146865845,
+          "loss_difference": 0.0,
+          "sequence_logprob": {
+            "seq_mean": 0.0,
+            "seq_absmean": 0.0,
+            "seq_p99": 0.0,
+            "seq_max": 0.0,
+            "tok_absmean": 0.0,
+            "tok_max": 0.0
+          },
+          "aggregate_gradient": {
+            "relative_l2": 0.13215988929049075,
+            "cosine": 0.9912725701412012,
+            "norm_ratio": 1.000628804805089
+          },
+          "compared_gradient_tensors": 320,
+          "parameter_gradient_relative_l2_max": 0.3043194447974326,
+          "parameter_gradient_cosine_min": 0.9541201775066193
+        }
+      ],
+      "gradient_boundary": "Forward loss and all token logprobs are bit exact. Full gradients are not: first candidate relative L2 0.13119/cosine 0.99140 versus baseline repeat 0.13090/0.99142. Candidate variation is comparable to baseline repetition; this does not establish deterministic gradient equality.",
+      "DDP_boundary": "The f613 detached source has no new DDP gate in this artifact. Previous DDP gate belongs to62f647 source; retain its distinct fingerprint."
+    },
+    "E2E_v2_source_snapshot": {
+      "count": 32,
+      "all_match": true,
+      "evidence_sha256": "dd28774a1673ce86b32962eab1fa3e6daf3aa9ef63306e35173d5e9174dbc8c4"
+    },
+    "E2E_v2_metadata_sha256": "a7c6e5167ff83e81d18eba2acd0c34895b945ee23b0b5f8e6cfac3f8c30eaec6",
+    "E2E_v2_history_sha256": "e6a931390bf96cf30fd4363198b424c8a3a39f4185e303553d975c2c42714d94",
+    "E2E_v2_runtime_boundary": {
+      "schema": "poor-rl-compact-v2-real-shape-boundary-v1",
+      "created_utc": "2026-10-05T05:04:20.390039+00:00",
+      "run_name": "fp8_compact128_v2",
+      "source_sha256": "f613be41e4b9411b4c586b89de85c524aa970088c12beb79148ddbeaecb57b34",
+      "trainer_log_sha256": "b9de35ef586574483bf4193ab09630b07735c012250333a27e8155f397b8577a",
+      "compiler_limit_events": [
+        {
+          "rank": 1,
+          "function": "_rms_backward",
+          "limit": 8,
+          "reason": "x.stride()[0] == x.size()[1] guard failed"
+        },
+        {
+          "rank": 2,
+          "function": "_rms_backward",
+          "limit": 8,
+          "reason": "x.stride()[0] == x.size()[1] guard failed"
+        },
+        {
+          "rank": 3,
+          "function": "_rms_backward",
+          "limit": 8,
+          "reason": "x.stride()[0] == x.size()[1] guard failed"
+        },
+        {
+          "rank": 0,
+          "function": "_rms_backward",
+          "limit": 8,
+          "reason": "tensor x row stride mismatch at index0: expected256, actual512"
+        }
+      ],
+      "compiled_backward_eliminated_all_recompiles": false,
+      "interpretation": "Detach fixes original base-shape alias guards tested on contiguous CPU shapes; actual E2E varied activation strides still reached Dynamo recompile_limit on all four trainer ranks and fell back. No claim that E2E backward remains fully compiled.",
+      "judge_boundary": {
+        "valid_parsed_outcomes": 92,
+        "group_outcome_attempts": 202,
+        "fail": 110,
+        "timeout": 0,
+        "failure_fraction": 0.5445544554455446,
+        "scope": "All scored task records read; independent of optimizer timing window. Scored samples include later drops.",
+        "comparison": "Configuration was the same asv1, realized judge failure fraction54.46% versus8.84% differs materially. Report this completed throughput as observed system performance, not a clean reward-service-matched causal comparison or validated learning-quality result."
+      }
+    },
+    "E2E_v2_judge_failure_diagnostics": {
+      "created_utc": "2026-10-05T05:09:14.042949+00:00",
+      "run_name": "fp8_compact128_v2",
+      "task_source_sha256": "9e079d30cba1bac51ca339d7015f4ef78a77f462025535541aea19c47906fb1d",
+      "error_records": 110,
+      "value_type_counts": {
+        "str": 110
+      },
+      "text_pattern_classification": {
+        "unclassified": 110
+      },
+      "HTTP_status_counts": {},
+      "exception_type_counts": {
+        "InternalServerError": 110
+      },
+      "empty_error_count": 0,
+      "boundary": "Bounded metadata classification from halluc_judge_error only. No prompt, completion, full error body, response, credentials or endpoint printed. Pattern classes do not prove upstream root cause.",
+      "logger_code_boundary": "Reward logger stores type(e).__name__ only; HTTP status, upstream body and error cause were not retained. Historical110 errors cannot be classified beyond exception type from these artifacts."
+    }
+  },
+  "fixed_decode_prefill_probe": {
+    "schema": "poor-rl-fixed-token-GDN-prefill-probe-v1",
+    "created_utc": "2026-10-05T04:48:46.584810+00:00",
+    "scope": "Fixed saved tokens, unchanged checkpoint; serving prefill versus real teacher-forced cached decode LP. No training/performance claim.",
+    "comparison_boundary": "Both arms recompute prefill AND cached decode with identical token IDs. Prefill changes the initial decode state; this is an end-to-end algorithm comparison, not an isolated decode-kernel effect.",
+    "token_artifact_sha256": "b1137a935f3da0bdf166266f00476f74ef96f37de5f1bad12439510a3c4afec0",
+    "same_fixed_tokens_all_six_cases": true,
+    "same_source_and_settings": true,
+    "threshold": 0.004,
+    "case_lengths": [
+      128,
+      256
+    ],
+    "unique_prompts": 3,
+    "source_sha256": {
+      "rlforge.__init__": "9f5875b19df72d47b047c454918e4d60463f2d7168b89eef8185eecf203a8f97",
+      "rlforge.agent_cli": "e9ac12cfd9fb6b10c049e0a1f74f5231b34c63376538b0400e076428fc7e9287",
+      "rlforge.agent_file_memory": "c32143bc564363e5dbdba7b311af5e23badd46c069b9e633f407fb711884f4f0",
+      "rlforge.agent_mcp": "f0d3acd8dc69cb6feac49b3185cc3687d77bd738df7c3b08548bd3ad263ead3f",
+      "rlforge.agent_policy": "0761a6d6ce9a91480769ade8226808208a02b5a57bf1a7bf7d1c1c695a86b4d8",
+      "rlforge.agent_tools": "b0cbee2e84be70defa498e99cafa50cd5bfb4a0bf4ca3951fa41102dec859e62",
+      "rlforge.agentic": "8f0d423f4c372f9444dea8533f4d4d87288b5a8c57420543db1a6a7db07e6ee5",
+      "rlforge.dashboard": "9e9d5714616062397c0128fd7b331199abcef4e12cdf658dc04250c4e91a2d4f",
+      "rlforge.dp_route": "ed41c1d86271371dc2ccd678fbf5a143924540b2647c8f24efe8d068321ea000",
+      "rlforge.drop_audit": "6e7d9fd3a92128515224499e038cf121f5683e8017e18551c8fbf2d21da457de",
+      "rlforge.eval_mcq": "e5ee68030997097f87895c370932d3a54d9cf884570d76da5862a6c031833afc",
+      "rlforge.fast_logprob": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f",
+      "rlforge.fp8": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+      "rlforge.fp8_alignment": "62f647b8c941dacbabef27897b077f2eab7eea4c0941bae839ca42a409343d7d",
+      "rlforge.fp8_serving": "b15ccea1083f5913b423004df219f668337463c314cadc9f94e4c789c25704c0",
+      "rlforge.fused_ops": "d433c924354a45046b1163e4a6e1878166e9bce9c6a2a970243c1c36bba0c324",
+      "rlforge.gspo": "21fd12a9857de4218b82ab19ae5d212399fcbd1198bfa357021cf4bed396e965",
+      "rlforge.hybrid_packing": "ff64217b8bf4e4a0976dbb9b250ae84aef63eef44f134b5a0dbffd06d928eec7",
+      "rlforge.knowledge": "2ce4ec100640ef4bcbbd4578de471d848326b1bf352ccb23836e594127f63b4f",
+      "rlforge.prefix_share": "b4df9db9d6961ecf8d112bf61ed1e2a7752889a3ea7d78199c21e9cdba84c92c",
+      "rlforge.prefix_share_sm80": "86cc7e1fa2c15261046f3685d40cbfa1bffd54a52f975cd68357244ba4a2d910",
+      "rlforge.report": "456a102094b979a01469b6438ced329ab0c05a2c3912e00716961a242a4281e3",
+      "rlforge.rl_panel": "e0357d62e14d51cc7b441c341696a1e5d8822a30d3d1c58d280761373bcbe604",
+      "rlforge.rl_trials": "14173c75d46f8be76a58f2a6d4ff3bccd181cb888227e9e87322c9cc2f678dcf",
+      "rlforge.score_loop": "9f14f59e6f50f8d3c9e676753cbd8b5b9ed6e52b023b4446965dab8b21738425",
+      "rlforge.trainer": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb",
+      "rlforge.watchdog": "7504ec509f5fd72d93311c7f816edd5f9fe8c970c282bd50dc42bb8c0dc37fa2",
+      "rlforge.rewards.__init__": "0d068036168284eecf553ba0ecba77769af9dfeca6b4e54ae10fe20685cb8004",
+      "rlforge.rewards.mcq": "0db9b4d80a4aba75c5f3784c8a11de1ff03dbb5d401b0ba5fb253d7cbb694a8e",
+      "rlforge.rollout.__init__": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rlforge.rollout.lora_agent": "cbf9aadf3609712737dc0e1f9eb805f76a8937b37a644066b93026da03f0c415",
+      "rlforge.rollout.router": "3020f5afb0d289895f5d992030ad116738e4bb8e01e187f6bd25672dc8ed97ed"
+    },
+    "settings": {
+      "dtype": "bfloat16",
+      "quantization": "poor_rl_fp8",
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.4,
+      "max_model_len": 8192,
+      "max_num_seqs": 4,
+      "max_num_batched_tokens": 8192,
+      "enable_chunked_prefill": false,
+      "enforce_eager": false,
+      "kv_cache_dtype": "auto",
+      "mamba_ssm_cache_dtype": "float32",
+      "enable_prefix_caching": false,
+      "logprobs_mode": "raw_logprobs",
+      "async_scheduling": false,
+      "additional_config": {
+        "gdn_prefill_backend": "triton"
+      }
+    },
+    "harness_sha256": {
+      "shared_prefill_gate.py": "1e072d788afe76ede75814efb955bed06829957a20c54d92a2f757728dfd4ba9",
+      "poor_rl_shared_prefill_probe.py": "a6821f0382928158c1774dd39eda23d7aff99daa2d5adde54d4527ea495c6de6",
+      "run_shared_prefill_probe.sh": "1d3178fdc3c20de63a47f8438c61b69a1d899f6f98cb749c81f4f255b816acc3"
+    },
+    "log_evidence": [
+      {
+        "artifact": "fixed_vendor_1.log",
+        "sha256": "974508db24a3a3fd8c8c8c4091cf5bf8045f2c76d247ec2e4bdfba4972957577",
+        "bytes": 21069,
+        "traceback_count": 0,
+        "runtimeerror_count": 0,
+        "cache_disabled_messages": 1
+      },
+      {
+        "artifact": "fixed_shared_1.log",
+        "sha256": "dfd501f33c7db3f60038bd1b1697398854ec1353a827562c4a2d19d05e67b567",
+        "bytes": 19842,
+        "traceback_count": 0,
+        "runtimeerror_count": 0,
+        "cache_disabled_messages": 1
+      },
+      {
+        "artifact": "shared_kernel_1.log",
+        "sha256": "9f0eff9a3591570cd18b8206891edfe5c124ab9301a2826921d039d53cff4e9b",
+        "bytes": 3570,
+        "traceback_count": 0,
+        "runtimeerror_count": 0,
+        "cache_disabled_messages": 0
+      }
+    ],
+    "arms": [
+      {
+        "impl": "vllm",
+        "replay_api": "processor",
+        "evidence_sha256": "993a906299f9d0b6f13560bc47f3fb1d36c3ede7579b29ec8c0b033cd1324e2d",
+        "case_count": 6,
+        "forced_tokens_exact_count": 6,
+        "mean_gate_pass_count": 2,
+        "all_cases_pass": false,
+        "contract": [
+          {
+            "embedding_dtype": "torch.float32",
+            "head_dtype": "torch.float32",
+            "head_embedding_same_parameter": true,
+            "head_fp8_cache": true,
+            "prefill_function_module": "vllm.third_party.flash_linear_attention.ops.chunk",
+            "prefill_uses_shared": false,
+            "packed_function_module": "vllm.third_party.flash_linear_attention.ops.fused_recurrent",
+            "generic_function_module": "vllm.third_party.flash_linear_attention.ops.fused_sigmoid_gating",
+            "gdn_layers": 18,
+            "gdn_prefill_backends": [
+              "triton"
+            ],
+            "gdn_decode_kernels": [
+              "triton"
+            ],
+            "packed_decode_enabled": [
+              true
+            ],
+            "runner_module": "vllm.v1.worker.gpu_model_runner",
+            "logprobs_mode": "raw_logprobs"
+          }
+        ],
+        "rows": [
+          {
+            "case": 0,
+            "max_tokens": 128,
+            "prompt_tokens": 2623,
+            "generated_tokens": 128,
+            "full_tokens_sha256": "2457dbaef030b13423629a39f9918178035dde626ac1800f9538d411c020b686",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": -0.008841102646528931,
+            "mean_abs_token_difference": 0.035288197602398874,
+            "p90_abs_token_difference": 0.12109887599945068,
+            "max_abs_token_difference": 0.3518798351287842,
+            "first_token_difference": 0.0,
+            "passes_mean_ratio_gate": false
+          },
+          {
+            "case": 1,
+            "max_tokens": 128,
+            "prompt_tokens": 29,
+            "generated_tokens": 128,
+            "full_tokens_sha256": "7dae3323925cc5203b26d485d8337cf0231cbb99527b162b783c4950cf8fe558",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": 0.004616833173689383,
+            "mean_abs_token_difference": 0.023508130471170674,
+            "p90_abs_token_difference": 0.07289189100265503,
+            "max_abs_token_difference": 0.41315925121307373,
+            "first_token_difference": -0.04466503858566284,
+            "passes_mean_ratio_gate": false
+          },
+          {
+            "case": 2,
+            "max_tokens": 128,
+            "prompt_tokens": 41,
+            "generated_tokens": 128,
+            "full_tokens_sha256": "b38bd48859edaf7c76d6b13d5c34ab1f34923d23fc79ece8ddcdf83ee7159521",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": -0.00246455399352552,
+            "mean_abs_token_difference": 0.02691333122328121,
+            "p90_abs_token_difference": 0.0886939987540245,
+            "max_abs_token_difference": 0.45086073875427246,
+            "first_token_difference": -0.26338714361190796,
+            "passes_mean_ratio_gate": true
+          },
+          {
+            "case": 0,
+            "max_tokens": 256,
+            "prompt_tokens": 2623,
+            "generated_tokens": 256,
+            "full_tokens_sha256": "9e8147e14055d11e1d36753ed4b7165024dd86d9e571ed60f58a40e378f13337",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": -0.007739443188373829,
+            "mean_abs_token_difference": 0.03146956697225123,
+            "p90_abs_token_difference": 0.11430546641349792,
+            "max_abs_token_difference": 0.3518798351287842,
+            "first_token_difference": 0.0,
+            "passes_mean_ratio_gate": false
+          },
+          {
+            "case": 1,
+            "max_tokens": 256,
+            "prompt_tokens": 29,
+            "generated_tokens": 256,
+            "full_tokens_sha256": "a747ff32a20f16e38ef801b7ab8fb008e29cd937a4161018d469b9e4c01383da",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": -0.0024667404597862874,
+            "mean_abs_token_difference": 0.020992877258457054,
+            "p90_abs_token_difference": 0.055685654282569885,
+            "max_abs_token_difference": 0.6349103003740311,
+            "first_token_difference": -0.04466503858566284,
+            "passes_mean_ratio_gate": true
+          },
+          {
+            "case": 2,
+            "max_tokens": 256,
+            "prompt_tokens": 41,
+            "generated_tokens": 256,
+            "full_tokens_sha256": "753e2035f5fcbb0c6c196e9cb831dacd1213ef5897fe58d322253e94ae573da3",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": -0.0042006215195247165,
+            "mean_abs_token_difference": 0.022488702501994584,
+            "p90_abs_token_difference": 0.058683544397354126,
+            "max_abs_token_difference": 0.5447981357574463,
+            "first_token_difference": -0.26338714361190796,
+            "passes_mean_ratio_gate": false
+          }
+        ]
+      },
+      {
+        "impl": "shared_fla",
+        "replay_api": "processor",
+        "evidence_sha256": "a0a797f8c69708f998b7f92d6a343c8f9b8f7e78450cb391aadfd4424d7acca6",
+        "case_count": 6,
+        "forced_tokens_exact_count": 6,
+        "mean_gate_pass_count": 4,
+        "all_cases_pass": false,
+        "contract": [
+          {
+            "embedding_dtype": "torch.float32",
+            "head_dtype": "torch.float32",
+            "head_embedding_same_parameter": true,
+            "head_fp8_cache": true,
+            "prefill_function_module": "poor_rl_shared_prefill_probe",
+            "prefill_uses_shared": true,
+            "packed_function_module": "vllm.third_party.flash_linear_attention.ops.fused_recurrent",
+            "generic_function_module": "vllm.third_party.flash_linear_attention.ops.fused_sigmoid_gating",
+            "gdn_layers": 18,
+            "gdn_prefill_backends": [
+              "triton"
+            ],
+            "gdn_decode_kernels": [
+              "triton"
+            ],
+            "packed_decode_enabled": [
+              true
+            ],
+            "runner_module": "vllm.v1.worker.gpu_model_runner",
+            "logprobs_mode": "raw_logprobs"
+          }
+        ],
+        "rows": [
+          {
+            "case": 0,
+            "max_tokens": 128,
+            "prompt_tokens": 2623,
+            "generated_tokens": 128,
+            "full_tokens_sha256": "2457dbaef030b13423629a39f9918178035dde626ac1800f9538d411c020b686",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": 0.004156866489496647,
+            "mean_abs_token_difference": 0.031706911480858135,
+            "p90_abs_token_difference": 0.10609418153762817,
+            "max_abs_token_difference": 0.2546965479850769,
+            "first_token_difference": 0.0,
+            "passes_mean_ratio_gate": false
+          },
+          {
+            "case": 1,
+            "max_tokens": 128,
+            "prompt_tokens": 29,
+            "generated_tokens": 128,
+            "full_tokens_sha256": "7dae3323925cc5203b26d485d8337cf0231cbb99527b162b783c4950cf8fe558",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": -0.000991585713005838,
+            "mean_abs_token_difference": 0.026739243192693385,
+            "p90_abs_token_difference": 0.07215356826782227,
+            "max_abs_token_difference": 0.4327719211578369,
+            "first_token_difference": 0.4327719211578369,
+            "passes_mean_ratio_gate": true
+          },
+          {
+            "case": 2,
+            "max_tokens": 128,
+            "prompt_tokens": 41,
+            "generated_tokens": 128,
+            "full_tokens_sha256": "b38bd48859edaf7c76d6b13d5c34ab1f34923d23fc79ece8ddcdf83ee7159521",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": -0.00011702951629799507,
+            "mean_abs_token_difference": 0.022573436936448532,
+            "p90_abs_token_difference": 0.05748507380485535,
+            "max_abs_token_difference": 0.41610920429229736,
+            "first_token_difference": 0.1621306836605072,
+            "passes_mean_ratio_gate": true
+          },
+          {
+            "case": 0,
+            "max_tokens": 256,
+            "prompt_tokens": 2623,
+            "generated_tokens": 256,
+            "full_tokens_sha256": "9e8147e14055d11e1d36753ed4b7165024dd86d9e571ed60f58a40e378f13337",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": 0.0031669885364586092,
+            "mean_abs_token_difference": 0.026649682636896793,
+            "p90_abs_token_difference": 0.09238088130950928,
+            "max_abs_token_difference": 0.2843218147754669,
+            "first_token_difference": 0.0,
+            "passes_mean_ratio_gate": true
+          },
+          {
+            "case": 1,
+            "max_tokens": 256,
+            "prompt_tokens": 29,
+            "generated_tokens": 256,
+            "full_tokens_sha256": "a747ff32a20f16e38ef801b7ab8fb008e29cd937a4161018d469b9e4c01383da",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": 0.010770948746449904,
+            "mean_abs_token_difference": 0.03569560630344604,
+            "p90_abs_token_difference": 0.08318790793418884,
+            "max_abs_token_difference": 2.3562266752123833,
+            "first_token_difference": 0.4327719211578369,
+            "passes_mean_ratio_gate": false
+          },
+          {
+            "case": 2,
+            "max_tokens": 256,
+            "prompt_tokens": 41,
+            "generated_tokens": 256,
+            "full_tokens_sha256": "753e2035f5fcbb0c6c196e9cb831dacd1213ef5897fe58d322253e94ae573da3",
+            "forced_tokens_exact": true,
+            "mean_prefill_minus_decode": -4.9279222729681216e-05,
+            "mean_abs_token_difference": 0.018475207208067057,
+            "p90_abs_token_difference": 0.04859727621078491,
+            "max_abs_token_difference": 0.41610920429229736,
+            "first_token_difference": 0.1621306836605072,
+            "passes_mean_ratio_gate": true
+          }
+        ]
+      }
+    ],
+    "same_input_kernel_gate": {
+      "scope": "Same Q/K/V/g/beta/FP32 initial state kernel probe; no model, backward or throughput validation",
+      "evidence_sha256": "9322a1732de734ddd99ac73b62718585428523f3dc16ca3196db33afacbedd1e",
+      "rows": [
+        {
+          "lengths": [
+            29
+          ],
+          "state_layout": "V-by-K",
+          "state_dtype": "torch.float32",
+          "wrapper_vs_direct": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "wrapper_state_vs_direct": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "direct_repeat": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "direct_state_repeat": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "vendor_vs_trainer": {
+            "bitexact": false,
+            "all_finite": true,
+            "relative_l2": 0.0008334564045071602,
+            "max_abs": 0.000244140625
+          },
+          "vendor_state_vs_trainer": {
+            "bitexact": false,
+            "all_finite": true,
+            "relative_l2": 0.0005262932972982526,
+            "max_abs": 0.0017652064561843872
+          },
+          "buffer_exact": true,
+          "initial_unchanged": true
+        },
+        {
+          "lengths": [
+            65
+          ],
+          "state_layout": "V-by-K",
+          "state_dtype": "torch.float32",
+          "wrapper_vs_direct": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "wrapper_state_vs_direct": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "direct_repeat": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "direct_state_repeat": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "vendor_vs_trainer": {
+            "bitexact": false,
+            "all_finite": true,
+            "relative_l2": 0.0009801335399970412,
+            "max_abs": 0.000244140625
+          },
+          "vendor_state_vs_trainer": {
+            "bitexact": false,
+            "all_finite": true,
+            "relative_l2": 0.0006757642840966582,
+            "max_abs": 0.003841966390609741
+          },
+          "buffer_exact": true,
+          "initial_unchanged": true
+        },
+        {
+          "lengths": [
+            29,
+            41
+          ],
+          "state_layout": "V-by-K",
+          "state_dtype": "torch.float32",
+          "wrapper_vs_direct": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "wrapper_state_vs_direct": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "direct_repeat": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "direct_state_repeat": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "vendor_vs_trainer": {
+            "bitexact": false,
+            "all_finite": true,
+            "relative_l2": 0.0009403823059983552,
+            "max_abs": 0.000244140625
+          },
+          "vendor_state_vs_trainer": {
+            "bitexact": false,
+            "all_finite": true,
+            "relative_l2": 0.0007130178855732083,
+            "max_abs": 0.003452897071838379
+          },
+          "buffer_exact": true,
+          "initial_unchanged": true
+        },
+        {
+          "lengths": [
+            63,
+            65
+          ],
+          "state_layout": "V-by-K",
+          "state_dtype": "torch.float32",
+          "wrapper_vs_direct": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "wrapper_state_vs_direct": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "direct_repeat": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "direct_state_repeat": {
+            "bitexact": true,
+            "all_finite": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0
+          },
+          "vendor_vs_trainer": {
+            "bitexact": false,
+            "all_finite": true,
+            "relative_l2": 0.0009801674168556929,
+            "max_abs": 0.000244140625
+          },
+          "vendor_state_vs_trainer": {
+            "bitexact": false,
+            "all_finite": true,
+            "relative_l2": 0.0006862004520371556,
+            "max_abs": 0.0036615580320358276
+          },
+          "buffer_exact": true,
+          "initial_unchanged": true
+        }
+      ],
+      "all_wrapper_output_state_bitexact": true,
+      "all_initial_state_unmodified": true
+    },
+    "disposition": "not_promoted",
+    "numerical_boundary": "Threshold is a sequence-mean log-ratio diagnostic, not tokenwise equality. Shared prefill passed4/6, original vLLM2/6. Failures remain0.0041569 and0.0107709; token deviations up to2.35623. Both prefill and subsequent cached decode change because prompt recurrent state changes. This small probe supplies no E2E throughput or training-quality proof."
+  },
+  "contiguous_backward_followup": {
+    "source_sha256": {
+      "fp8.py": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+      "fp8_alignment.py": "736108537b40ebb3ebbea16d9195a7078f23d92cd01237ce42d01a28b32e5d75",
+      "trainer.py": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb",
+      "fast_logprob.py": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f"
+    },
+    "script_sha256": "8fa4f1677bf8e0676f5c5ebd66bfd9e94940b0f7246f43818d42a40444932c3e",
+    "scope": "Fixed G32 forward/backward plus frozen BF16 reference, excluding rollout and optimizer timing",
+    "token_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+    "completion_tokens": 58248,
+    "artifact_sha256": "6a0882f43563e7193694346226eaac26146569101cd8c5f68624ef85eb1b873b",
+    "log_sha256": "176afebfdfe2704855c56913f4221c2a1f0c1cff5fae9a2596b65b1740bc79af",
+    "local_remote_hashes_match": true,
+    "fp32_master_gradient_adam_update": true,
+    "source_AST_audit": {
+      "created_utc": "2026-10-05T05:12:44.381929+00:00",
+      "previous_alignment_sha256": "f613be41e4b9411b4c586b89de85c524aa970088c12beb79148ddbeaecb57b34",
+      "current_alignment_sha256": "736108537b40ebb3ebbea16d9195a7078f23d92cd01237ce42d01a28b32e5d75",
+      "added_contiguous_calls": 13,
+      "AST_identical_after_stripping_contiguous": true,
+      "boundary": "Only no-argument contiguous calls changed executable AST. Loss/forward arithmetic stays the same; copy and compiler layout behavior must be measured separately."
+    },
+    "rows": [
+      {
+        "mode": "0",
+        "budget_gib": 80,
+        "samples_ms": [
+          2755.977747961879,
+          2754.34978492558,
+          2754.4610230252147
+        ],
+        "median_ms": 2754.4610230252147,
+        "peak_gib": 85.37531661987305,
+        "loss": 0.29771000146865845,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.0,
+          "cosine": 1.0,
+          "norm_ratio": 1.0
+        },
+        "compared_gradient_tensors": 320
+      },
+      {
+        "mode": "1",
+        "budget_gib": 80,
+        "samples_ms": [
+          2494.8885049670935,
+          2494.197721593082,
+          2495.3215355053544
+        ],
+        "median_ms": 2494.8885049670935,
+        "peak_gib": 75.04253625869751,
+        "loss": 0.29771000146865845,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.1319311366180042,
+          "cosine": 0.9912900921438922,
+          "norm_ratio": 0.9991547076748255
+        },
+        "compared_gradient_tensors": 320
+      },
+      {
+        "mode": "0",
+        "budget_gib": 80,
+        "samples_ms": [
+          2752.9076607897878,
+          2962.9500582814217,
+          2753.542125225067
+        ],
+        "median_ms": 2753.542125225067,
+        "peak_gib": 85.92689657211304,
+        "loss": 0.29771000146865845,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.13285165891639,
+          "cosine": 0.9911844640279986,
+          "norm_ratio": 1.0009920446031881
+        },
+        "compared_gradient_tensors": 320
+      },
+      {
+        "mode": "1",
+        "budget_gib": 80,
+        "samples_ms": [
+          2493.73001139611,
+          2493.5498563572764,
+          2495.54692953825
+        ],
+        "median_ms": 2493.73001139611,
+        "peak_gib": 75.0472846031189,
+        "loss": 0.29771000146865845,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.1322342358592231,
+          "cosine": 0.9912394820499469,
+          "norm_ratio": 0.9976885547957403
+        },
+        "compared_gradient_tensors": 320
+      },
+      {
+        "mode": "1",
+        "budget_gib": 112,
+        "samples_ms": [
+          2400.9290263056755,
+          2405.3100030869246,
+          2640.3096970170736
+        ],
+        "median_ms": 2405.3100030869246,
+        "peak_gib": 102.63856363296509,
+        "loss": 0.29771000146865845,
+        "loss_difference": 0.0,
+        "sequence_logprob": {
+          "seq_mean": 0.0,
+          "seq_absmean": 0.0,
+          "seq_p99": 0.0,
+          "seq_max": 0.0,
+          "tok_absmean": 0.0,
+          "tok_max": 0.0
+        },
+        "aggregate_gradient": {
+          "relative_l2": 0.13130648778211054,
+          "cosine": 0.991371497206022,
+          "norm_ratio": 0.999040197670721
+        },
+        "compared_gradient_tensors": 320
+      }
+    ],
+    "gradient_boundary": "Forward loss and all token logprobs exact. Full gradients vary: firstcandidateL2.13193/cos.99129 vsbaserepeat.13285/.99118, comparableto baseline repetition; no deterministic gradient equality claim.",
+    "E2E_status": "completed",
+    "E2E_source_snapshot": {
+      "count": 32,
+      "all_match": true,
+      "evidence_sha256": "39d2114728237970fd2ee57bb39a95a09a686411134960d6e7f3844c4a077d6c"
+    },
+    "compiler_boundary": "contiguous normalizes thirteen backward view inputs. Fixed-shape gate passes; complete real-length E2E and remaining compiler fallback must still be inspected.",
+    "E2E_metadata_sha256": "14fe45111fa5bf6e38bb9ccd27b0240bf46ba0e4ce16c05ceade43d162e22d00",
+    "E2E_history_sha256": "4a0f102b7c5df3556211e628d89d6f6422d5a5465959365f558e1307491ef9e1",
+    "E2E_runtime_evidence": {
+      "created_utc": "2026-10-05T05:23:35.719545+00:00",
+      "run_name": "fp8_compact128_v3",
+      "trainer_exit_code": 0,
+      "stop_reason": "completed",
+      "trainer_log_sha256": "ec72383bfd7606bb5061d30268a50e3212066631d92ae3d6e6154a455882b61a",
+      "server_log_sha256": "f8b7bf60168fa6bd88c2ef545e134a083fa174b1adc2efb2540cbeda76c6e14a",
+      "compiler_recompile_limit_messages": 0,
+      "stride_mismatch_messages": 0,
+      "base_shape_guard_messages": 0,
+      "traceback_count": 0,
+      "CUDA_error_count": 0,
+      "safe_judge_exception_types": {
+        "InternalServerError": 5,
+        "APITimeoutError": 3
+      },
+      "source_snapshot_file_count": 32,
+      "all_source_snapshot_hashes_match_manifest": true,
+      "core_source_sha256": {
+        "rlforge.fast_logprob": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f",
+        "rlforge.fp8": "0b0aea57dbfdab03c77cb5ce2c8deaf8eea0dee5fa80f8b0696106a077dd48a8",
+        "rlforge.fp8_alignment": "736108537b40ebb3ebbea16d9195a7078f23d92cd01237ce42d01a28b32e5d75",
+        "rlforge.fp8_serving": "b15ccea1083f5913b423004df219f668337463c314cadc9f94e4c789c25704c0",
+        "rlforge.trainer": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb"
+      },
+      "cache_disabled_log_messages": 1,
+      "AOT_direct_load_messages": 0,
+      "CUDA_graph_log_messages": 803,
+      "boundary": "Completed trainer/server log keyword evidence. Zero Dynamo recompile-limit messages means no observed limit fallback in this run, not proof of complete kernel coverage or zero individual recompiles. Judge logs retain exception type only; HTTP status and upstream cause were not saved."
+    }
+  }
+}
