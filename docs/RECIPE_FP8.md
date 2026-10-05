@@ -136,6 +136,8 @@ The remote environment lacked pytest; assertions were executed by saved direct
 harnesses, including eight FP8 checks and twelve serving CPU checks.
 
 Historical comparison corrections: [`FP8_HISTORY_2026-10-05.md`](reports/FP8_HISTORY_2026-10-05.md).
+Final-source operator profiling and actual microbatch comparisons:
+[`FP8_PROFILE_2026-10-05.md`](reports/FP8_PROFILE_2026-10-05.md).
 
 ## Matched 4 + 4 scaling checks (2026-10-05)
 
