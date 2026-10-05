@@ -2,6 +2,13 @@
 
 **High-performance reinforcement learning on a small GPU budget.**
 
+**[Panel: setup and generation guide](docs/PANEL.md#fixed-panel-entry)** ·
+[Local panel home](http://127.0.0.1:63400/) ·
+[Cluster mirroring and collaboration](docs/PANEL_LINK.md)
+
+The local link opens the panel on your own machine after setup; the guide is the
+permanent public entry for generating and following your own experiment panels.
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
 ![Scope](https://img.shields.io/badge/scope-single--node%20%C2%B7%20small%20models-green)

@@ -6,6 +6,43 @@ PyTorch or Stable-Baselines3 experiments. The rlforge HTML report remains the
 source for task-aware RL interpretation; verl users can optionally add RL-Insight
 for distributed rollout and system observability.
 
+## Fixed panel entry
+
+Bookmark this guide: [github.com/guoshaoyang-pku/poor-rl/blob/main/docs/PANEL.md](https://github.com/guoshaoyang-pku/poor-rl/blob/main/docs/PANEL.md#fixed-panel-entry).
+The dashboard runs on each viewer's machine; these localhost links are not a
+publicly hosted copy of the author's experiments.
+
+| Panel | Fixed local URL | Data directory |
+|---|---|---|
+| Home | [127.0.0.1:63400](http://127.0.0.1:63400/) | `dashboard_home.html`, `artifacts/samples/` |
+| AIQ / LLM RL | [127.0.0.1:63401](http://127.0.0.1:63401/) | `artifacts/swanlab/AIQ/swanlog/` |
+| Suika | [127.0.0.1:63402](http://127.0.0.1:63402/) | `artifacts/swanlab/Suika/swanlog/` |
+| SFT | [127.0.0.1:63403](http://127.0.0.1:63403/) | `artifacts/swanlab/SFT/swanlog/` |
+
+From the repository root, create a persistent dashboard environment:
+
+```bash
+python3 -m venv .venv-panel
+.venv-panel/bin/python -m pip install -e ".[panel]"
+```
+
+Start Home and AIQ in separate terminals, both from the repository root:
+
+```bash
+# Terminal 1
+.venv-panel/bin/python scripts/home.py --host 127.0.0.1 --port 63400
+
+# Terminal 2
+ROOT="$PWD" VENV="$PWD/.venv-panel" PROJECT=AIQ PORT=63401 bash scripts/panel.sh
+```
+
+For Suika or SFT, run the second command with `PROJECT=Suika PORT=63402` or
+`PROJECT=SFT PORT=63403`. Existing offline data is displayed immediately. New
+training runs must log to the matching data directory, using `SWANLAB_MODE=local`,
+`SWANLAB_LOGDIR` and `SWANLAB_PROJ_NAME` as described below. To import and refresh
+remote experiments and rollout samples, follow [the mirroring guide](PANEL_LINK.md).
+Environment and data stay in the checkout, rather than a temporary directory.
+
 ## Unified local Home
 
 Start the local launcher to reach all three isolated SwanLab panels from one

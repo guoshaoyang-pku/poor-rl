@@ -47,8 +47,8 @@
 2. **本地环境**：Python ≥3.10、tmux、克隆本 repo。
 3. **SwanLab venv**（只装一次）：
    ```bash
-   python3 -m venv /tmp/rlforge-swanlab-preview-venv
-   /tmp/rlforge-swanlab-preview-venv/bin/pip install -e ".[panel]"
+   python3 -m venv .venv-panel
+   .venv-panel/bin/pip install -e ".[panel]"
    ```
    venv 路径不同没关系，用 `RLFORGE_VENV_PY=/path/to/venv/bin/python` 覆盖。
 
@@ -56,24 +56,29 @@
 
 ```bash
 cd /path/to/rlforge
+export ROOT="$PWD"
+export VENV="$ROOT/.venv-panel"
+export RLFORGE_VENV_PY="$VENV/bin/python"
 
 # 1. 主站
-cd scripts && python3 home.py &
+"$VENV/bin/python" scripts/home.py &
 
 # 2. 三个 SwanLab 面板
-ROOT=$PWD/.. PROJECT=AIQ   PORT=63401 VENV=/tmp/rlforge-swanlab-preview-venv bash scripts/panel.sh &
-ROOT=$PWD/.. PROJECT=Suika PORT=63402 VENV=/tmp/rlforge-swanlab-preview-venv bash scripts/panel.sh &
-ROOT=$PWD/.. PROJECT=SFT   PORT=63403 VENV=/tmp/rlforge-swanlab-preview-venv bash scripts/panel.sh &
+PROJECT=AIQ   PORT=63401 bash scripts/panel.sh &
+PROJECT=Suika PORT=63402 bash scripts/panel.sh &
+PROJECT=SFT   PORT=63403 bash scripts/panel.sh &
 
 # 3. 镜像守护（核心：每 5 分钟从集群拉新实验/新评测/新样本）
-/tmp/rlforge-swanlab-preview-venv/bin/python scripts/panel_mirror.py --loop 300
+"$VENV/bin/python" scripts/panel_mirror.py --loop 300
 ```
 
 打开 http://127.0.0.1:63400 即可看到所有面板入口、GPU 状态区和 Rollout 样本卡片。
 首轮镜像会把集群上所有匹配 run（含历史 run 的全部阶梯评测）拉回本地，
 之后只增量更新有变化的 run。
 
-**一行懒人模式**：直接 `nohup bash scripts/panel_watchdog.sh &`，它会每 60 秒
+**保活模式**：`panel_watchdog.sh` 目前含作者机器的绝对路径和旧 `/tmp` 环境路径；
+先将其中 `ROOT`、`VENV` 改为自己的 checkout 和 `.venv-panel`，并创建
+`tmux new-session -d -s rlforge-panels`，再运行 `nohup bash scripts/panel_watchdog.sh &`。它会每 60 秒
 检查主站/三面板/镜像守护，挂了就自动拉起（日志 `/tmp/panel_watchdog.log`、
 `/tmp/panel_mirror.log`、`/tmp/panel_<project>.log`）。
 

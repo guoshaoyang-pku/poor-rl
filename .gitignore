@@ -11,5 +11,6 @@ data/
 tmp/
 _shims/
 artifacts/
+.venv-panel/
 # local-only archive of retired trial exports (still in git history)
 examples/suika_trials_archive/
