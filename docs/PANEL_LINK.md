@@ -29,10 +29,12 @@
 
 | 端口 | 服务 | 启动方式 | 数据 |
 |---|---|---|---|
-| 63400 | 主站 hub | `cd scripts && python3 home.py` | 动态页 + `artifacts/samples/` + `artifacts/gpu_status.json` |
+| 63400 | 主站 hub | `python3 scripts/home.py`（仓库根目录） | 动态页 + `artifacts/samples/` + `artifacts/gpu_status.json` |
 | 63401 | AIQ 面板（RL 实验） | `PROJECT=AIQ PORT=63401 bash scripts/panel.sh` | `artifacts/swanlab/AIQ/swanlog` |
 | 63402 | Suika 面板 | `PROJECT=Suika PORT=63402 bash scripts/panel.sh` | `artifacts/swanlab/Suika/swanlog` |
 | 63403 | SFT 面板 | `PROJECT=SFT PORT=63403 bash scripts/panel.sh` | `artifacts/swanlab/SFT/swanlog` |
+| 63404 | G32 主线 | `swanlab watch artifacts/swanlab/G32/swanlog --host 127.0.0.1 --port 63404` | `artifacts/swanlab/G32/swanlog` |
+| — | GPU 采集器 | `python3 scripts/gpu_status.py --loop 60` | GPU / RAM 实时快照与故障标记 |
 | — | 镜像守护 | `python3 scripts/panel_mirror.py --loop 300` | 远端 → SwanLab + samples |
 | — | 保活守护 | `bash scripts/panel_watchdog.sh` | 自动重启上述全部 |
 
@@ -68,13 +70,20 @@ PROJECT=AIQ   PORT=63401 bash scripts/panel.sh &
 PROJECT=Suika PORT=63402 bash scripts/panel.sh &
 PROJECT=SFT   PORT=63403 bash scripts/panel.sh &
 
-# 3. 镜像守护（核心：每 5 分钟从集群拉新实验/新评测/新样本）
+# 3. GPU / RAM 采集（未启动时主站状态区没有数据）
+"$VENV/bin/python" scripts/gpu_status.py --loop 60 &
+
+# 4. 镜像守护（核心：每 5 分钟从集群拉新实验/新评测/新样本）
 "$VENV/bin/python" scripts/panel_mirror.py --loop 300
 ```
 
 打开 http://127.0.0.1:63400 即可看到所有面板入口、GPU 状态区和 Rollout 样本卡片。
 首轮镜像会把集群上所有匹配 run（含历史 run 的全部阶梯评测）拉回本地，
 之后只增量更新有变化的 run。
+
+作者当前本机实例由 macOS launchd 维护主站、四个子站、GPU 采集和本地导出同步，
+配置与重启方式见 [Maintained macOS instance](PANEL.md#maintained-macos-instance)。
+本地导出同步只刷新已导出的实验数据；不会代替本节的远端镜像。
 
 **保活模式**：`panel_watchdog.sh` 目前含作者机器的绝对路径和旧 `/tmp` 环境路径；
 先将其中 `ROOT`、`VENV` 改为自己的 checkout 和 `.venv-panel`，并创建

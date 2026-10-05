@@ -18,6 +18,7 @@ publicly hosted copy of the author's experiments.
 | AIQ / LLM RL | [127.0.0.1:63401](http://127.0.0.1:63401/) | `artifacts/swanlab/AIQ/swanlog/` |
 | Suika | [127.0.0.1:63402](http://127.0.0.1:63402/) | `artifacts/swanlab/Suika/swanlog/` |
 | SFT | [127.0.0.1:63403](http://127.0.0.1:63403/) | `artifacts/swanlab/SFT/swanlog/` |
+| G32 training mainline | [127.0.0.1:63404](http://127.0.0.1:63404/) | `artifacts/swanlab/G32/swanlog/` |
 
 From the repository root, create a persistent dashboard environment:
 
@@ -37,7 +38,15 @@ ROOT="$PWD" VENV="$PWD/.venv-panel" PROJECT=AIQ PORT=63401 bash scripts/panel.sh
 ```
 
 For Suika or SFT, run the second command with `PROJECT=Suika PORT=63402` or
-`PROJECT=SFT PORT=63403`. Existing offline data is displayed immediately. New
+`PROJECT=SFT PORT=63403`. For an existing G32 store, run
+`.venv-panel/bin/swanlab watch artifacts/swanlab/G32/swanlog --host 127.0.0.1 --port 63404`.
+Start the GPU collector in another terminal to populate Home's GPU/RAM section:
+
+```bash
+.venv-panel/bin/python scripts/gpu_status.py --loop 60
+```
+
+Existing offline data is displayed immediately. New
 training runs must log to the matching data directory, using `SWANLAB_MODE=local`,
 `SWANLAB_LOGDIR` and `SWANLAB_PROJ_NAME` as described below. To import and refresh
 remote experiments and rollout samples, follow [the mirroring guide](PANEL_LINK.md).
@@ -56,12 +65,37 @@ Open `http://127.0.0.1:63400`. The Home opens each panel in a new browser tab;
 the AIQ, Suika, and SFT SwanLab panels remain on ports `63401`, `63402`, and
 `63403`, respectively. Start those panel processes separately with
 `scripts/panel.sh` and the matching `PROJECT` value. The Home server only serves
-its landing page and does not expose the repository directory. The current
-long-running local instance uses tmux session `rlforge-panels` with one window
-per service (`home`, `aiq`, `suika`, `sft`). Reattach with
-`tmux attach -t rlforge-panels`, list windows with
-`tmux list-windows -t rlforge-panels`, and stop all four with
-`tmux kill-session -t rlforge-panels`.
+its landing page and does not expose the repository directory.
+
+### Maintained macOS instance
+
+The author's local instance uses seven macOS LaunchAgents:
+`com.poorrl.panel.home`, `.aiq`, `.suika`, `.sft`, `.g32`, `.gpu`, and `.sync`.
+Each has `RunAtLoad` and `KeepAlive` enabled. The runtime is in
+`~/Library/Application Support/PoorRL/panel`, with its own Python environment,
+data copies, logs, and `OPERATIONS.md`; keeping the runtime outside Desktop
+avoids background filesystem access restrictions. Plists live in
+`~/Library/LaunchAgents/com.poorrl.panel.*.plist`.
+
+The GPU collector polls seven configured SSH hosts every 60 seconds. The sync
+service checks the checkout's exported SwanLab stores and sample files every
+60 seconds, uses SQLite backup to copy concurrent databases, repairs stale chart
+references in runtime copies, and restarts only changed panels. It does not
+import remote training logs: those still need the remote mirroring/import step.
+Home displays the local sync-check timestamp; `/api/panel_status` also reports
+each source export's timestamp, so a healthy server is distinguishable from fresh
+experiment data. Historical run status text is not a remote trainer liveness check.
+
+Restart a maintained service, for example Home:
+
+```bash
+launchctl kickstart -k "gui/$(id -u)/com.poorrl.panel.home"
+```
+
+This LaunchAgent setup is specific to the author's machine. Other viewers can
+use the manual commands above and the mirroring guide with their own paths and
+SSH access. The GitHub link is the public setup guide; live local experiments
+are served only on the viewer's machine.
 
 ## SwanLab: general experiment tracking
 
