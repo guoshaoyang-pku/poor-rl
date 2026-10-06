@@ -141,3 +141,5 @@ class MasterFP8Config(QuantizationConfig):
 
 def register():
     register_quantization_config(MasterFP8Config.get_name())(MasterFP8Config)
+    from rlforge.serving_decode import register as register_decode
+    register_decode()

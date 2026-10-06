@@ -4719,6 +4719,70 @@
       ],
       "cpu_gate_sha256": "e74d31e45dbabf44d716bfa0995d666e32e8fabe89675595efb048f9f8dfcc0c",
       "native_loader_gate_sha256": "b24b70bfd339c98ab34b0b5cb49e486d8ef6e7c4e1ae6fa9dcf25bd79f2dc47e"
+    },
+    "judge_transport_repair": {
+      "run": "fp8_convsilu_bw_refv5_mb1024gas1_dp4_samplecachef32ssm352_judgev4_v1",
+      "primary_step_bounds": [
+        4,
+        6
+      ],
+      "secondary_step_bounds": [
+        2,
+        6
+      ],
+      "primary_trained_tokens": 27345505,
+      "primary_complete_step_s": 198.45562181714922,
+      "primary_median_step_s": 67.8615039633587,
+      "primary_token_s": 137791.53621153292,
+      "primary_ratio_to_strongest_bf16": 2.566396935557629,
+      "secondary_token_s": 130682.68636096323,
+      "wall_parts": {
+        "perf/fwd_bwd_s": 164.102882145904,
+        "perf/rollout_wait_s": 17.019030570983887,
+        "perf/weight_sync_s": 0.6651620864868164,
+        "residual_s": 16.668547013774514
+      },
+      "wall_parts_fraction": {
+        "perf/fwd_bwd_s": 0.8268996395431077,
+        "perf/rollout_wait_s": 0.08575736184820547,
+        "perf/weight_sync_s": 0.0033516918311322814,
+        "residual_s": 0.08399130677755448
+      },
+      "exact_total_trained_tokens": 52338223,
+      "physical_gpu_count": 10,
+      "layout": "4 policy + 4 rollout + 2 full BF16 reference",
+      "real_microbatch_per_rank": 1024,
+      "gas": 1,
+      "global_samples": 4096,
+      "group_size": 32,
+      "timely_parsed_verdicts": 151,
+      "finished_selected_futures": 154,
+      "timely_fraction": 0.9805194805194806,
+      "old_rep10_timely_fraction": 0.013157894736842105,
+      "source_change": "Judge transport3131->3134 only; six steps and unique run suffix",
+      "runtime_gates_passed": 58,
+      "reference_coverage": "All 52,338,223 trained completion tokens; 24 V5 plans consumed, zero fallback",
+      "precision_boundary": "Same native FP8 policy arithmetic; wholemodel trainer/decode consistency remains failed. No learning-quality equivalence claim.",
+      "mfu_boundary": "No new whole-model MFU measurement",
+      "evidence_sha256": {
+        "quality_judgev4_final_wall_drop_audit.json": "e173f0501351d87ace61a18d9da453ea00cd07eaaf76d1b4d4392894ef0d6d1c",
+        "quality_judgev4_final_judge_arm_audit.json": "ff1c0cbb0140ad247f7a7a968b326c09b7dc5633dfb829fabae3da276832626e",
+        "quality_judgev4_final_phase_audit.json": "ecce249328f12058e8c83f96224c0aaabc277096020d77327ca12589bf5c387f",
+        "reference_post_quality_judgev4_before_probes_snapshot.json": "9cec97c83a2f06077fc2c0f4c292d4a63bcc5f92a2f2574d9148502e0d1423e7",
+        "fp8_convsilu_bw_refv5_mb1024gas1_dp4_samplecachef32ssm352_judgev4_v1_runtime_audit.json": "917f9f1f5743ffe1878d16e23c2c56cb920596aa5c1e4d15b6c1efa5cb6ad891"
+      }
+    },
+    "native_decode_integration": {
+      "enabled_by": "RLFORGE_SERVING_DECODE=1",
+      "default": "off",
+      "canonical_source_sha256": "ca4ee0eaadeaf6d9424cad88edc3366ee2bf959efdbbf31140a6a0fc020bf6ce",
+      "native_steps_exact": 11776,
+      "mixed_cases_passed": 13,
+      "main_spawn_arms_passed": 4,
+      "full_single_gpu_ratio_to_frozen_recipe": 0.9810241878768909,
+      "boundary": "Exact code promoted from tested staging. Native fallback differs from archived speed recipe; no totalRL nonregression or speedup claim.",
+      "formal_pytest": "Remote pytest unavailable, local vLLM unavailable; direct installed-native gates passed",
+      "handoff_sha256": "f3a3f803b9ff1ed9c5da67f7925e5d13c9fb1e57ceb55364e8fec319bb0dcbed"
     }
   },
   "canonical_microbatch_metrics_integration": {

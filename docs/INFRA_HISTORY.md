@@ -22,6 +22,7 @@ Qwen3.5-0.8B；主参数和优化器为 FP32，训练计算精度见表（v3.2�
 | Native FP8（融合／缓存／MB1024）⁴ | FP8 | 4＋4＋2 reference | 3 | 71.67 | 135,439 | 8.6% | — | 待验证 |
 | **Native FP8（同源码复现，step 4–6）⁴** | FP8 | **4＋4＋2 reference** | **3** | **64.76** | **136,825** | **9.0%** | — | 待验证 |
 | Native FP8（同次复现，step 7–10）⁴ | FP8 | 4＋4＋2 reference | 4 | 69.18 | 108,421 | 23.8% | — | 待验证 |
+| **Native FP8（judge 链路修复，step 4–6）⁴** | FP8 | **4＋4＋2 reference** | **3** | **67.86** | **137,792** | **8.6%** | — | 待验证 |
 
 本轮FP8与4＋4对照统计步骤4–20；历史长run统计step≥4。总吞吐＝Σ completion token / Σ step秒，等待和MFU按计时加权。v0、v1和4＋4对照使用同一checkpoint、KL reference、数据及公共超参数；v0是FP32训练基线，使用SDPA＋PyTorch fallback。历史各行的checkpoint、batch和judge配置不同；4＋5主线另有1张评测卡。
 
@@ -33,7 +34,7 @@ FP8完整混合精度MFU暂无，不能套用BF16峰值。本轮数据与源码�
 
 ³ 该轮judge上游失败占54.5%，源码与设置对齐，但实际奖励服务状态不同；速度仅作为系统观测。
 
-⁴ 新配方真实microbatch为每rank 1024、GAS=1、global batch=4096，保留独立G32；旧4＋4对照global batch=1024。另用2张独立H200计算完整固定BF16 reference，共10张卡。两次run的主窗口预先固定step 4–6，10步复现另固定step 7–10；训推逐token一致性未通过，复现及时judge verdict仅3/228（1.3%）。短窗口吞吐不能代表相同有效reward或学习质量。实验代码见[冻结源码包](reports/FP8_SPRINT_2026-10-06_sources.tar.gz)，运行基座为公开提交`2d9295e`；需要原checkpoint、数据、reward和对应运行环境，仓库主入口尚未集成全部实验配方。
+⁴ 新配方真实microbatch为每rank 1024、GAS=1、global batch=4096，保留独立G32；旧4＋4对照global batch=1024。另用2张独立H200计算完整固定BF16 reference，共10张卡。三次run的主窗口预先固定step 4–6，10步复现另固定step 7–10；训推逐token一致性未通过；原10步复现及时judge verdict为3/228（1.3%），修复连接回退与取消后为151/154（98.1%），模型、prompt、RPM与90秒预算保持原设置。短窗口吞吐不能代表相同有效reward或学习质量。实验代码见[冻结源码包](reports/FP8_SPRINT_2026-10-06_sources.tar.gz)，运行基座为公开提交`2d9295e`；需要原checkpoint、数据、reward和对应运行环境，仓库主入口尚未集成全部实验配方。
 
 改动简述：
 
@@ -45,6 +46,7 @@ FP8完整混合精度MFU暂无，不能套用BF16峰值。本轮数据与源码�
 - **Native FP8**：前反向GEMM使用FP8，更新与累加保持FP32；修复变长量化重复编译、fused AdamW缓存不刷新、vLLM AOT缓存dtype错配。
 - **FP8早期优化**：Norm反向保存输入并重算中间值，减少activation checkpoint；统一backward布局，总吞吐提高14.1%。
 - **FP8新配方**：融合conv＋SiLU、仅打包小维度Norm反向；减少native scheduler／KV bookkeeping和输出处理；缓存sampled-token文本并使用FlatLogprobs；提前在独立卡计算完整BF16 reference；真实microbatch增大到1024，使用整数token计数和丢弃审计。保持FP32主参数、梯度和Adam，以及BF16 attention KV。
+- **Judge链路**：修复首个地址连接卡住时的取消与回退，每地址TCP／TLS预算3秒，保持整体89秒deadline；复用健康连接，及时判分恢复至98.1%。
 - **未采用的修改**：FP8 attention KV完整cohort慢11.9%；两个独立G32合并投影＋MLP虽logprob逐值一致，却慢9.7%、显存113.8 GiB；MB2048也因rollout等待未达到2×。训推仍在修复GDN recurrence的状态布局与计算顺序，两端同步修改。
 
 可选原生logprob缓存已集成为`RLFORGE_SERVING_LOGPROBS_CACHE=1`（默认关闭，安装包后由vLLM general plugin加载）；58,262位置的原生字段、UTF-8及累计logprob逐值一致，main／spawn均通过。开启时需使用记录的vLLM源码版本；stream／top-K／echo等请求回到原生路径。
@@ -52,3 +54,5 @@ FP8完整混合精度MFU暂无，不能套用BF16峰值。本轮数据与源码�
 主入口支持`--num-generations 32 --completions-per-step 1024 --microbatch-per-rank 1024 --exact-token-counts`，即每卡真实microbatch 1024、GAS=1。指标通信由8–9次合成1次；四卡NCCL的64组对照最大差1.2×10⁻¹⁰，G32分组和样本字段保持一致。整数计数仅在显式开启时应用，要求记录的TRL源码版本；其余FP8实验配方仍见源码包。
 
 同八卡对齐实测，v3.2总吞吐是v1的**27.2倍**；同4＋5卡历史记录，v3.1e→v3.2提高**1.72倍**。
+
+可选decode调度与输出处理已集成为`RLFORGE_SERVING_DECODE=1`（默认关闭），保留原生边界fallback与依赖源码检查。11,776步原生状态对照、13种混合场景和main／spawn均通过；整理后的单卡完整生成比冻结实验链慢1.9%，尚未证明完整RL无回归，不替换上表实验配方。
