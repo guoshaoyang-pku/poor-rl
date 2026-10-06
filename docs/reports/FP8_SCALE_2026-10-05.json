@@ -4487,5 +4487,238 @@
       "CUDA_graph_log_messages": 803,
       "boundary": "Completed trainer/server log keyword evidence. Zero Dynamo recompile-limit messages means no observed limit fallback in this run, not proof of complete kernel coverage or zero individual recompiles. Judge logs retain exception type only; HTTP status and upstream cause were not saved."
     }
+  },
+  "fp8_sprint_2026_10_06": {
+    "metric": "SUM exact actually-trained completion tokens / SUM complete optimizer-update wall seconds, including rollout wait and weight sync",
+    "strongest_bf16_token_s": 53690.65646175791,
+    "target_token_s": 107381.31292351583,
+    "runs": [
+      {
+        "run": "fp8_convsilu_bw_refv5_mb1024gas1_dp4_samplecachef32ssm352_v1",
+        "completed": true,
+        "resources": {
+          "policy_h200": 4,
+          "rollout_h200": 4,
+          "full_bf16_reference_h200": 2,
+          "physical_h200": 10
+        },
+        "actual_microbatch_per_rank": 1024,
+        "gradient_accumulation": 1,
+        "global_samples_per_update": 4096,
+        "G": 32,
+        "precision": "FP32 masters/gradients/Adam; native FP8 PTPC trainer+rollout; FP32 SSM state; BF16 attention KV",
+        "windows": [
+          {
+            "role": "preregistered_primary",
+            "steps": [
+              4,
+              6
+            ],
+            "n": 3,
+            "actual_trained_completion_tokens": 27146675,
+            "full_update_wall_s": 200.4354282701388,
+            "actual_trained_completion_token_s": 135438.50622761564,
+            "ratio_vs_strongest_bf16": 2.522571247086242,
+            "median_step_s": 71.66541251633316,
+            "rollout_wait_fraction": 0.08565181077767257
+          },
+          {
+            "role": "preregistered_secondary",
+            "steps": [
+              2,
+              6
+            ],
+            "n": 5,
+            "actual_trained_completion_tokens": 46100052,
+            "full_update_wall_s": 349.6031117858365,
+            "actual_trained_completion_token_s": 131863.96358005088,
+            "ratio_vs_strongest_bf16": 2.455994623086295,
+            "median_step_s": 72.08788205869496,
+            "rollout_wait_fraction": 0.1151186558536831
+          }
+        ],
+        "exact_total_trained_tokens": 52311614,
+        "integer_counts_match_all_four_reference_ranks": true,
+        "timely_judge_verdicts": 9,
+        "finished_selected_futures": 143,
+        "timely_judge_fraction": 0.06293706293706294,
+        "evidence_sha256": {
+          "samplecache_f32ssm352dp4_final_wall_drop_audit.json": "c3b5dcf5ed3766ad272b883beff55eecb5366d86799140c3ed429ea8d0a14a7f",
+          "samplecache_f32ssm352dp4_final_judge_arm_audit.json": "858d79dfc4efc6aeaac1e258c2fceddbdbdc9059fedc65ee6c6de811c6cfea8e",
+          "samplecache_f32ssm352dp4_actual_startup_audit.json": "395b3188fd4c4938ac9f005ec7b74c52442e87099354e0d771dbda95463ea7d4",
+          "samplecache_f32ssm352dp4_experimental_source_archive_audit.json": "e085492211be3743b8eb18bbdcbf310f3f53e7e085d5c67e35f8ddf1c4667306"
+        }
+      },
+      {
+        "run": "fp8_convsilu_bw_refv5_mb1024gas1_dp4_samplecachef32ssm352_rep10_v1",
+        "completed": true,
+        "resources": {
+          "policy_h200": 4,
+          "rollout_h200": 4,
+          "full_bf16_reference_h200": 2,
+          "physical_h200": 10
+        },
+        "actual_microbatch_per_rank": 1024,
+        "gradient_accumulation": 1,
+        "global_samples_per_update": 4096,
+        "G": 32,
+        "precision": "FP32 masters/gradients/Adam; native FP8 PTPC trainer+rollout; FP32 SSM state; BF16 attention KV",
+        "windows": [
+          {
+            "role": "preregistered_primary",
+            "steps": [
+              4,
+              6
+            ],
+            "n": 3,
+            "actual_trained_completion_tokens": 27167288,
+            "full_update_wall_s": 198.55563211347908,
+            "actual_trained_completion_token_s": 136824.5650391487,
+            "ratio_vs_strongest_bf16": 2.5483868899350175,
+            "median_step_s": 64.75720045622438,
+            "rollout_wait_fraction": 0.08964831359698983
+          },
+          {
+            "role": "preregistered_secondary",
+            "steps": [
+              2,
+              6
+            ],
+            "n": 5,
+            "actual_trained_completion_tokens": 46513610,
+            "full_update_wall_s": 345.0654159039259,
+            "actual_trained_completion_token_s": 134796.4990294781,
+            "ratio_vs_strongest_bf16": 2.5106137252296254,
+            "median_step_s": 70.81682063825428,
+            "rollout_wait_fraction": 0.1041172386371531
+          },
+          {
+            "role": "preregistered_extended",
+            "steps": [
+              7,
+              10
+            ],
+            "n": 4,
+            "actual_trained_completion_tokens": 29985223,
+            "full_update_wall_s": 276.5624483311549,
+            "actual_trained_completion_token_s": 108421.1655665407,
+            "ratio_vs_strongest_bf16": 2.0193674786555373,
+            "median_step_s": 69.1766944276169,
+            "rollout_wait_fraction": 0.23789010650662115
+          }
+        ],
+        "exact_total_trained_tokens": 82588068,
+        "integer_counts_match_all_four_reference_ranks": true,
+        "timely_judge_verdicts": 3,
+        "finished_selected_futures": 228,
+        "timely_judge_fraction": 0.013157894736842105,
+        "evidence_sha256": {
+          "samplecache_f32ssm352dp4rep10_final_wall_drop_audit.json": "c4f35db528f7af7e2517117faa0badb34e1146480a197061d0deec2783b4b476",
+          "samplecache_f32ssm352dp4rep10_final_judge_arm_audit.json": "3fbd7fdf7e45a74f0ff183df007d1710365ff66525e781154f8b058c37c2e5fc",
+          "samplecache_f32ssm352dp4rep10_actual_startup_audit.json": "eb0dd3c82d1a94517c8eaf7a5dc3b6de3f04c828bb75488cab5d9a0f66580083",
+          "samplecache_f32ssm352dp4rep10_experimental_source_archive_audit.json": "c552d11fc9da4940c8ea4b8fae00966d53ccc073e4f1a81cd3f8344fbe07c4a6"
+        }
+      }
+    ],
+    "replication": "Same recorded recipe/source; only steps6to10 and uniqueoutputname changed",
+    "microbatch_boundary": "TrueMB1024/rank,GAS1,independentG32 groups. Baseline global1024 vs newglobal4096; no equal-learningqualityclaim.",
+    "changes": [
+      "conv+SiLU fusion with native matched forward and packed small-norm backward only",
+      "bounded native KV/scheduler bookkeeping and per-request output path with unsupported fallbacks",
+      "exact native sampled-token textLRU, lazyUTF8 context and FlatLogprobs",
+      "full fixedBF16 reference ahead on2dedicatedH200 plus exact trainedtoken counters and source-pinned payload encoding",
+      "inventory352,inflight6144,buffer4096,scoreconcurrency64"
+    ],
+    "rejected_candidates": [
+      "FP8 attentionKV complete native cohort0.880624x vsBF16KV",
+      "independenttwoREALG32 fullprojection/MLP joining0.903x vsnative,113.84GiB; exactLP doesnotprove deterministicgradient",
+      "MB2048/GAS1 primary86673token/s belowtarget; rolloutwait41.5pct"
+    ],
+    "profile": {
+      "scope": "Actual projection+LMhead GEMMs from audited input shapes and CUDA kernel attribution; useful GEMM FLOPs excludeattention/GDN/norm/elementwise/optim/reference. Includescheckpointreplay, so not whole-modelMFU.",
+      "actual_gemm_tflop": 315.130597343232,
+      "forward_gemm_tflop": 126.707802570752,
+      "backward_gemm_tflop": 188.42279477248,
+      "fp8_kernel_ms": 245.7325529999998,
+      "gemm_kernel_tflop_s": 1282.412905803458,
+      "h200_dense_fp8_peak_tflop_s": 1979,
+      "gemm_kernel_utilization_pct": 64.80105638218585,
+      "gemm_flops_per_full_probe_compute_pct_peak": 9.727563307133709,
+      "full_probe_compute_median_ms": 1636.969970703125,
+      "full_probe_includes_local_bf16_reference": true,
+      "whole_model_mfu": null,
+      "traces_sha256": "27f2718642c61ab244221e99b162ec23805a065590bf018f8323545cb32733b2",
+      "metadata_sha256": "a3d1de7a2e7ff119f455eca70b11865897a9e3c311f92df5cc4604be81861941"
+    },
+    "code": {
+      "public_runtime_base": "2d9295ec6c78d717ab7b909500bb175cad88c892",
+      "all_runtime_sources_match_public_base": true,
+      "public_runtime_files": 32,
+      "experimental_snapshot": "FP8_SPRINT_2026-10-06_sources.tar.gz",
+      "experimental_snapshot_sha256": "be4970c529d7e8a87cffe7e0bae19d6e2c95a8a0832441c36cdb7e7ca8848554",
+      "experimental_files": 88,
+      "recorded_during_run": 72,
+      "postrun_import_dependencies": 16,
+      "integration_boundary": "The archivedexperimentalentrypoints/prototypes produced speedmeasurements; repository nativeplugin alone doesnot reproducecomplete136825recipe. Requiresoriginalpolicy/reference/data/rewardinputfiles,compatiblelockedruntime and2dedicatedreferenceworkers; inputsnotbundled."
+    },
+    "quality_boundary": "Short throughput experiments only; whole-modeltrainer/prefill/decodeP90consistency gate notpassed. Rep10 timelyjudgerate3of228; no equivalent effective reward/learning quality. Extendedwindowonly0.97pctabove2xtarget; longtermstable2xunproven.",
+    "native_logprob_plugin": {
+      "enabled_by": "RLFORGE_SERVING_LOGPROBS_CACHE=1",
+      "default": "off",
+      "supported": "nativefinal-onlylogprobs0,noecho/topK/customlogprobIDs; installedQwentokenizer only; fallback otherwise",
+      "source_sha256": "538b0a9bdf2ccc641cb6f09c83fad4a3b6ec964ab0a94ac6cbb37ffaa5d474d0",
+      "cpu_positions": 58262,
+      "cpu_fixtures": 33,
+      "native_full_fields_utf8_and_cumulative_exact": true,
+      "cpu_ratio": 4.12675210219326,
+      "pytest_boundary": "Remote pytest notinstalled; exactrepository testfunction and directcontractgates executed. Native main/spawn entrypoint gate verified.",
+      "native_gpu_pair_ratio": 1.0009510436651072,
+      "gpu_pair_boundary": "Promotedcombinedplugin vs acceptedexperimentalcache nativecohort; performance equivalent. SharedGPUarithmetic unchanged, no totalRL gainclaimed.",
+      "validation_source_sha256": "538b0a9bdf2ccc641cb6f09c83fad4a3b6ec964ab0a94ac6cbb37ffaa5d474d0",
+      "native_main_spawn_rows": [
+        {
+          "mode": "main",
+          "passed": true,
+          "enabled": false,
+          "cuda_initialized": false,
+          "rng_exact": true,
+          "native_loader": true,
+          "idempotent": true,
+          "source_sha256": "538b0a9bdf2ccc641cb6f09c83fad4a3b6ec964ab0a94ac6cbb37ffaa5d474d0"
+        },
+        {
+          "mode": "spawn",
+          "passed": true,
+          "enabled": false,
+          "cuda_initialized": false,
+          "rng_exact": true,
+          "native_loader": true,
+          "idempotent": true,
+          "source_sha256": "538b0a9bdf2ccc641cb6f09c83fad4a3b6ec964ab0a94ac6cbb37ffaa5d474d0"
+        },
+        {
+          "mode": "main",
+          "passed": true,
+          "enabled": true,
+          "cuda_initialized": false,
+          "rng_exact": true,
+          "native_loader": true,
+          "idempotent": true,
+          "source_sha256": "538b0a9bdf2ccc641cb6f09c83fad4a3b6ec964ab0a94ac6cbb37ffaa5d474d0"
+        },
+        {
+          "mode": "spawn",
+          "passed": true,
+          "enabled": true,
+          "cuda_initialized": false,
+          "rng_exact": true,
+          "native_loader": true,
+          "idempotent": true,
+          "source_sha256": "538b0a9bdf2ccc641cb6f09c83fad4a3b6ec964ab0a94ac6cbb37ffaa5d474d0"
+        }
+      ],
+      "cpu_gate_sha256": "e74d31e45dbabf44d716bfa0995d666e32e8fabe89675595efb048f9f8dfcc0c",
+      "native_loader_gate_sha256": "b24b70bfd339c98ab34b0b5cb49e486d8ef6e7c4e1ae6fa9dcf25bd79f2dc47e"
+    }
   }
 }

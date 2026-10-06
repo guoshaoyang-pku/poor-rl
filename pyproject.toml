@@ -26,6 +26,7 @@ rlforge-agentic = "rlforge.agent_cli:main"
 
 [project.entry-points."vllm.general_plugins"]
 poor_rl_fp8 = "rlforge.fp8_serving:register"
+poor_rl_logprobs = "rlforge.serving_logprobs:register"
 
 [project.optional-dependencies]
 agent-mcp = ["mcp>=1.0"]
