@@ -358,3 +358,87 @@ def test_hot_reload_refreshes_quantized_weights_and_scales_in_place():
     assert torch.equal(layer.weight_scale, expected_scale)
     assert torch.equal(layer.weight.view(torch.uint8), expected_q.view(torch.uint8))
     assert not torch.equal(initial_scale, layer.weight_scale)
+
+
+def test_rope_rounding_requires_an_explicit_fp8_config_opt_in(monkeypatch):
+    from rlforge import serving_rope
+
+    calls = []
+    monkeypatch.setattr(serving_rope, "install", lambda: calls.append(True))
+    monkeypatch.delenv("RLFORGE_FP8_ROPE_BF16", raising=False)
+    fp8_serving.MasterFP8Config()
+    assert calls == []
+    monkeypatch.setenv("RLFORGE_FP8_ROPE_BF16", "1")
+    fp8_serving.MasterFP8Config.from_config({})
+    assert calls == [True]
+
+
+def test_shared_rope_preserves_default_and_fp16_routes(monkeypatch, tmp_path):
+    import hashlib
+    from rlforge import serving_rope
+    from vllm.model_executor.layers import fused_qk_norm_rope as native_module
+    from vllm.model_executor.models import qwen3_next
+
+    received = []
+
+    def native(*args, **kwargs):
+        received.append("native")
+        return ("native",)
+
+    def rounded(*args, **kwargs):
+        received.append("shared")
+        return ("shared",)
+
+    source = tmp_path / "native_rope.py"
+    source.write_text("source-pinned RoPE fixture")
+    monkeypatch.setattr(native_module, "__file__", str(source))
+    monkeypatch.setattr(native_module, "fused_qk_rmsnorm_rope_gate", native)
+    monkeypatch.setattr(qwen3_next, "fused_qk_rmsnorm_rope_gate", native)
+    monkeypatch.setattr(serving_rope, "_INSTALLED", None)
+    monkeypatch.setattr(serving_rope, "NATIVE_SOURCE_SHA256",
+        hashlib.sha256(source.read_bytes()).hexdigest())
+    monkeypatch.setattr(serving_rope, "fused_qk_rmsnorm_rope_gate", rounded)
+    monkeypatch.delenv("RLFORGE_FP8_ROPE_BF16", raising=False)
+    assert serving_rope.install() is False
+    assert qwen3_next.fused_qk_rmsnorm_rope_gate is native
+
+    monkeypatch.setenv("RLFORGE_FP8_ROPE_BF16", "1")
+    fp8_serving.MasterFP8Config()
+    shared = qwen3_next.fused_qk_rmsnorm_rope_gate
+    assert shared is not native
+    assert serving_rope.install() is True
+    assert qwen3_next.fused_qk_rmsnorm_rope_gate is shared
+    assert shared(torch.zeros(1, dtype=torch.bfloat16)) == ("shared",)
+    assert shared(q_gate=torch.zeros(1, dtype=torch.bfloat16)) == ("shared",)
+    assert shared(torch.zeros(1, dtype=torch.float16)) == ("native",)
+    assert received == ["shared", "shared", "native"]
+    monkeypatch.setattr(qwen3_next, "fused_qk_rmsnorm_rope_gate", native)
+    with pytest.raises(RuntimeError, match="replaced after installation"):
+        serving_rope.install()
+
+
+def test_shared_rope_refuses_changed_source_or_replaced_native(monkeypatch, tmp_path):
+    import hashlib
+    from rlforge import serving_rope
+    from vllm.model_executor.layers import fused_qk_norm_rope as native_module
+    from vllm.model_executor.models import qwen3_next
+
+    source = tmp_path / "native_rope.py"
+    source.write_text("changed native RoPE")
+    native = lambda *args, **kwargs: None
+    monkeypatch.setattr(native_module, "__file__", str(source))
+    monkeypatch.setattr(native_module, "fused_qk_rmsnorm_rope_gate", native)
+    monkeypatch.setattr(qwen3_next, "fused_qk_rmsnorm_rope_gate", native)
+    monkeypatch.setattr(serving_rope, "_INSTALLED", None)
+    monkeypatch.setattr(serving_rope, "NATIVE_SOURCE_SHA256", "changed")
+    monkeypatch.setenv("RLFORGE_FP8_ROPE_BF16", "1")
+    with pytest.raises(RuntimeError, match="source changed"):
+        serving_rope.install()
+    assert qwen3_next.fused_qk_rmsnorm_rope_gate is native
+    monkeypatch.setattr(serving_rope, "NATIVE_SOURCE_SHA256",
+        hashlib.sha256(source.read_bytes()).hexdigest())
+    replacement = lambda *args, **kwargs: None
+    monkeypatch.setattr(qwen3_next, "fused_qk_rmsnorm_rope_gate", replacement)
+    with pytest.raises(RuntimeError, match="already replaced"):
+        serving_rope.install()
+    assert qwen3_next.fused_qk_rmsnorm_rope_gate is replacement

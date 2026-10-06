@@ -26,6 +26,7 @@ Qwen3.5-0.8B；主参数和优化器为 FP32，训练计算精度见表（v3.2�
 | v4（β=0，4＋4静态） | FP8 | 4＋4 | 3 | 63.33 | 116,249 | 58.95× | 32.8% | 9.0% | 14.34 |
 | v4（β=0，4＋4自适应） | FP8 | 4＋4 | 3 | 63.53 | 141,979 | 72.00× | 16.5% | 11.2% | 14.33 |
 | **v4（β=0，4＋6静态）** | FP8 | 4＋6 | 3 | 58.01 | 151,401 | 76.78× | 11.3% | 11.8% | 14.20 |
+| **v4（β=0，4＋6最新复测，step 4–6）** | FP8 | **4＋6** | **3** | **61.02** | **148,653** | **75.38×** | **13.7%** | **11.4%** | **14.12** |
 
 ### v4 setting
 
@@ -55,7 +56,7 @@ v0、v1 与旧 4＋4 BF16 对照使用同 checkpoint、KL reference、数据和�
 
 ### 训推差异
 
-同 checkpoint、同 token、零参数更新，两端均为原生 FP8；1 个实际样本、128 个 completion token：
+2026-10-06 旧配方：同 checkpoint、同 token、零参数更新，两端均为原生 FP8；1 个实际样本、128 个 completion token：
 
 | logprob 差 | 有符号均值 | 逐 token 绝对差 P90 |
 |---|---:|---:|
@@ -63,7 +64,19 @@ v0、v1 与旧 4＋4 BF16 对照使用同 checkpoint、KL reference、数据和�
 | trainer−prefill | −0.00219 | 0.1254 |
 | prefill−decode | −0.00215 | 0.1431 |
 
-**P90 门槛 0.004，三项均未通过。** 无 optimizer update、主权重与 serving 权重未变；诊断 serving 的 batch／prefix cache 配置与生产不同，尚不能代表全 batch 一致性。性能提升已测到，训推一致仍需修复。
+旧配方的 **P90 门槛 0.004，三项均未通过**。上表生产吞吐仍来自该未对齐路径。
+
+2026-10-07 共同前向：3 个保存的 prompt，各测 128／256 个 completion token；一次真实 G32、GAS1 更新后热加载同一份权重：
+
+| 共同前向诊断 | trainer−decode 最坏逐 token P90 | 最大绝对差 | prefill−decode | 门槛 |
+|---|---:|---:|---:|---|
+| FP8 投影／head＋共同 FP32 GDN | 0.00000119 | 0.00000199 | 全 6 例为 0 | 6／6 通过 |
+| 同上，换成仓库内 BF16 RoPE | 0.00000119 | 0.00000199 | 全 6 例为 0 | 6／6 通过 |
+| 两端共同 BF16 GDN 中间量，state／gate／累加 FP32 | 0.00000131 | 0.00000191 | 全 6 例为 0 | 6／6 通过 |
+
+两种 GDN 路径均实际执行 **1,096 次 E5M2×E4M3 FP8 反向 GEMM**，320／320 个主参数被 FP32 Adam 更新；主参数、梯度和 Adam 状态均为有限 FP32。热加载的 8 项权重／scale／存储检查通过。前向未给 trainer 单独加精度；共同 FA3、pointwise、GDN 的规则在两端一致。BF16 RoPE 已作为可选模块接入仓库；其余共同算子栈仍在实验脚本中。
+
+此诊断为 **single-request、eager、TP1、BF16 KV、FP32 state**，关闭 prefix cache／chunked prefill／async scheduling。保存 token 的 old logprob／advantage 为合成值，未测试生产 reward、DDP、批量 serving 或对齐后的 4＋6 总吞吐。同权重 GSPO 四组 low／high 阈值的越界均为 0，属于假设 advantage 符号的数值检查，不能替代下面的生产 clip。证据：[训推与更新检查](reports/V4_ALIGNMENT_2026-10-07.json)。
 
 ### GSPO clip
 
@@ -95,12 +108,18 @@ v0、v1 与旧 4＋4 BF16 对照使用同 checkpoint、KL reference、数据和�
 | 原生 2:4 sparse FP8 | 大 down GEMM 最好 1.38×，head 1.03× | 改为 tensorwise scale 的单算子诊断；原 rowwise 大 GEMM 多数更慢 |
 | 零梯度 head | 固定 G32 compute 1.0018×，wall 0.9989× | 无整模型净收益；真实 token／权重，合成 advantage／old logprob，未使用生产 clip mask |
 | 固定 head tile Graph | eager 0.481 ms → graph 0.563 ms（0.855×） | 含全部输入刷新、输出 clone；数值／新权重检查通过，graph＋静态输入占 378 MiB |
+| 多请求 GDN primitive，B32 | 串行 57.835→批量 2.428 ms（23.82×） | reorder／slot 复用／chunk 边界／状态与梯度隔离通过；全模型 serving 接入待做 |
+| 两端共同 BF16 GDN primitive | FP32 3.091→BF16 0.917 ms（3.37×） | state／gate／累加保留 FP32；是单层前向时间 |
+| FP8 head 原生 FP32 epilogue 累加 | 固定 G32 compute 1026.32→1014.05 ms（1.012×） | 前向不变；尚未启用到生产 |
+| 共同栈三请求 full-model adapter | 128／256 token，2 种请求顺序；最大 trainer/decode P90 1.31e-6，最大绝对差 1.91e-6 | 共同 FP8 投影／head、pointwise、FA3、BF16 GDN 数值通过；显式 native-cache reset 因 inference tensor 保护失败，仍非生产接入 |
+| 真实 G32 共同 GDN 诊断 | 共同 FP32 GDN 13,429.84 ms；共同 BF16 GDN 1,762.01 ms；7.62× | 仅说明 FP32 IEEE 诊断路径的内伤；不是 FP8 生产提速，也不含 rollout／DDP |
+| GDN FP8 dgrad 候选 | 共同 BF16 GDN 829.89 ms；FP8 dq 829.13 ms；FP8 dq＋dv 838.44 ms | 完整模型无净收益，梯度 relative L2 0.180／0.200，高于 native repeat；不接入 |
 
-主吞吐仍为 **151,401 token/s＝76.78×v1**。本轮 100×目标按 v1 的 1,972 token/s 计算：**197,200 token/s**；同工作量和其他等待不变，compute 需 **47.82→34.39 秒／步**。同方法 MFU 14.31%→20% 对应 **34.22 秒／步**，均未达到。trace 的约 40 秒 profiler stop 开销与被扰动的 step 不计入吞吐。
+最新完成的未对齐生产窗口为 **148,653 token/s＝75.38×v1＝2.77×最强 BF16**；151,401 为此前最好短窗口。最新 3 步训练 27,367,325 个 completion token，用时 184.102 秒，计算 145.788 秒、等 rollout 25.290 秒、同步 0.797 秒。100×目标为 **197,200 token/s**；同工作量及其余时间不变，平均 compute 需 **48.60→33.49 秒／步（−31.1%）**。同方法 compute MFU 14.35%→20% 对应 **34.87 秒／步**，两个目标均未达到。trace 的约 40 秒 profiler stop 开销与被扰动的 step 不计入吞吐。
 
 优先减少 conv／norm／GDN、量化与反向写回的成本，提前生成 host 的 G32／索引计划，再处理 collator／整份 batch 复制及 4＋6 admission。生产 43.85% 是 GSPO 平坦分支的**序列比例**；先统计真实 inactive token 和完整零梯度 subbatch，再决定跳过反向。2:4 权重稀疏不会自动加速 wgrad，行 mask 也未必满足 dgrad 的转置约束；本轮稀疏和 Graph 候选均未启用。
 
-训推共同前向仍需对齐权重／scale、量化粒度、prefill／decode 与 GDN state；上面的整模型 gate 仍未通过。原始数值、源码哈希及测量边界：[本轮排查证据](reports/V4_MFU_SPARSE_2026-10-06.json)、[探针与 trace 解析源码](reports/V4_MFU_SPARSE_2026-10-06_sources.tar.gz)。
+共同前向的六例整模型诊断已通过；实验 full-model adapter 也完成了三请求并行 prefill/decode 数值 gate，但显式 native-cache reset 仍因 vLLM inference tensor 保护失败，chunked prefill、prefix cache、异步调度和生产热加载 reset 尚未接入。上面的 primitive 倍数不计入总吞吐。原始数值、源码哈希及测量边界：[本轮排查证据](reports/V4_MFU_SPARSE_2026-10-06.json)、[探针与 trace 解析源码](reports/V4_MFU_SPARSE_2026-10-06_sources.tar.gz)、[最新诊断](reports/V4_ALIGNMENT_2026-10-07.json)。
 
 ### 改动简述
 
@@ -109,6 +128,7 @@ v0、v1 与旧 4＋4 BF16 对照使用同 checkpoint、KL reference、数据和�
 - **v3.1 系列**：恢复并发 judge，增加 judged staleness 补偿、丢弃审计和固定 KL reference；**v3.2** 加入 fast logprob、token 子批、自适应 activation checkpoint、rank 负载均衡。
 - **v4**：前反向 GEMM 使用 FP8、更新与累加保持 FP32；修复量化重复编译、Adam 更新后量化缓存不刷新、vLLM 缓存 dtype 和 backward stride。融合 conv＋SiLU，减少 Norm 保存的中间量和 scheduler／输出处理，增大真实 microbatch。
 - **本轮 β=0**：去掉 KL reference，保留原 reward／judge；测试 4＋6 与逐步 admission 控制，补齐 MFU 估算、零更新训推差异、GSPO 两侧 clip 诊断。
-- **保留的限制**：FP8 KV、MB2048、合并独立 G32 的候选未带来预期收益；共同算子与融合梯度候选的整模型 gate 尚未通过。主入口只集成了部分可选优化，本表高吞吐来自冻结实验配方。
+- **共同前向**：统一 FP8 GEMM、FA3、RoPE、pointwise 和 GDN 的规则；FP8 反向与 FP32 更新通过六例诊断，BF16 RoPE 以可选模块接入。
+- **保留的限制**：FP8 KV、MB2048、合并独立 G32 的候选未带来预期收益；GDN 的 FP8 反向候选尚未通过，生产共同前向接入未完成。主入口只集成了部分可选优化，本表高吞吐来自冻结实验配方。
 
 数值、窗口、输入／源码哈希：[本轮 β=0 证据](reports/V4_BASELINE_2026-10-06.json)、[历史 FP8 证据](reports/FP8_SCALE_2026-10-05.json)。复核源码：[本轮脚本与数值](reports/V4_BASELINE_2026-10-06_sources.tar.gz)、[冻结实验基座](reports/FP8_SPRINT_2026-10-06_sources.tar.gz)；需要原 checkpoint、数据、reward 与记录的运行环境。

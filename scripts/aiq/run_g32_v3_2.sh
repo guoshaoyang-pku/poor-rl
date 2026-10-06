@@ -173,6 +173,10 @@ if [ "$FP8" = "native" ]; then
     || { echo "FP8=native requires FP32 masters, FAST_LOGPROB=1 and PREFIX_SHARE=on" >&2; exit 2; }
   KV_DTYPE=auto
   MIXED_PRECISION=bf16
+  export RLFORGE_FP8_FORWARD="${RLFORGE_FP8_FORWARD:-native}"
+  case "$RLFORGE_FP8_FORWARD" in native|torch) ;; *) echo "RLFORGE_FP8_FORWARD must be native or torch" >&2; exit 2 ;; esac
+  # The plugin changes embedding dtype before load; stale vLLM AOT caches miss it.
+  export VLLM_DISABLE_COMPILE_CACHE=1
 fi
 export RLFORGE_LOGPROB_BWD="${RLFORGE_LOGPROB_BWD:-tf32}"
 export RLFORGE_SB_ACT_GB="${RLFORGE_SB_ACT_GB:-80}"
@@ -379,6 +383,28 @@ fi
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE_SSH" \
   "test -x $VENV/bin/vllm && test -f $MODEL/model.safetensors && ip -4 -o addr show bond4 | grep -q 'inet $REMOTE_IP/'" \
   || fail "remote $REMOTE_SSH: venv/model/bond4 check failed"
+FP8_SOURCE_LOCAL=""
+if [ "$FP8" = "native" ]; then
+  FP8_SOURCE_CHECK='import hashlib, importlib.metadata as metadata, json, os, pathlib, rlforge
+p = pathlib.Path(rlforge.__file__).parent
+names = ("fp8.py", "fp8_serving.py", "fp8_alignment.py", "fast_logprob.py", "prefix_share.py", "serving_logprobs.py", "serving_decode.py", "serving_rope.py")
+missing = [n for n in names if not (p / n).is_file()]
+if missing: raise RuntimeError("FP8 source files missing: " + str(missing))
+plugins = [ep.value for ep in metadata.entry_points(group="vllm.general_plugins") if ep.name == "poor_rl_fp8"]
+if plugins != ["rlforge.fp8_serving:register"]: raise RuntimeError("Install the selected poor-rl checkout in this venv with pip install --no-deps -e <checkout> (poor_rl_fp8 entry point missing or conflicting)")
+allowed = os.environ.get("VLLM_PLUGINS")
+if allowed is not None and "poor_rl_fp8" not in allowed.split(","): raise RuntimeError("VLLM_PLUGINS disables poor_rl_fp8")
+print(json.dumps({"package_root": str(p), "sha256": {n: hashlib.sha256((p / n).read_bytes()).hexdigest() if (p / n).is_file() else None for n in names}, "fp8_plugin": plugins, "versions": {n: metadata.version(n) for n in ("torch", "vllm", "transformers", "triton")}}, sort_keys=True))'
+  FP8_SOURCE_LOCAL=$("$VENV/bin/python" -c "$FP8_SOURCE_CHECK") || fail "local FP8 source fingerprint failed"
+  _fp8_plugin_env="unset VLLM_PLUGINS;"
+  if [ "${VLLM_PLUGINS+x}" = "x" ]; then printf -v _fp8_plugin_env 'export VLLM_PLUGINS=%q;' "$VLLM_PLUGINS"; fi
+  printf -v _fp8_source_cmd '%s PYTHONPATH=%q %q -c %q' "$_fp8_plugin_env" "$PYTHONPATH" "$VENV/bin/python" "$FP8_SOURCE_CHECK"
+  FP8_SOURCE_REMOTE=$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE_SSH" "$_fp8_source_cmd") \
+    || fail "remote FP8 source fingerprint failed"
+  [ "$FP8_SOURCE_LOCAL" = "$FP8_SOURCE_REMOTE" ] || fail "FP8 source differs between trainer/local and remote rollout; synchronize the selected checkout"
+  export FP8_SOURCE_LOCAL
+  echo "[preflight] FP8 source identical on trainer/local and remote rollout"
+fi
 if ssh -o BatchMode=yes -o ConnectTimeout=10 "$REMOTE_SSH" \
   "test -s $REMOTE_DIR/vllm_headless.pid && kill -0 \$(cat $REMOTE_DIR/vllm_headless.pid) 2>/dev/null"; then
   fail "headless ranks of a previous $RUN_NAME launch are still alive on $REMOTE_HOST_LABEL ($REMOTE_DIR/vllm_headless.pid)"
@@ -419,7 +445,27 @@ TRAINER_ARGS=(-m rlforge.trainer --model "$MODEL" --train "$DATA" --out "$OUT" -
 # Remote headless ranks: one setsid session on 360-1 (pid == pgid), so stop = one group kill.
 # TMPDIR must stay short: vLLM binds zmq ipc sockets at \$TMPDIR/<uuid4> and the unix-socket path
 # limit is 107 chars (smoke 2026-10-03 14:04: \$REMOTE_DIR/tmp/<uuid> was 112+ chars -> ZMQError).
+FP8_SHARED_ENV_NAMES=(RLFORGE_FP8_FORWARD VLLM_DISABLE_COMPILE_CACHE VLLM_PLUGINS
+  RLFORGE_FP8_ROPE_BF16
+  RLFORGE_FP8_ALIGN_COMPILE RLFORGE_FP8_ALIGN_POINTWISE RLFORGE_FP8_ALIGN_BACKWARD
+  TRITON_F32_DEFAULT FLA_DISABLE_BACKEND_DISPATCH FLA_CACHE_MODE FLA_USE_FAST_OPS
+  VLLM_BATCH_INVARIANT VLLM_USE_V2_MODEL_RUNNER VLLM_GDN_DECODE_KERNEL
+  VLLM_ENABLE_FLA_PACKED_RECURRENT_DECODE RLFORGE_SERVING_DECODE)
+FP8_REMOTE_ENV=""
+if [ "$FP8" = "native" ]; then
+  printf -v FP8_REMOTE_ENV 'export PYTHONPATH=%q\n' "$PYTHONPATH"
+  for _fp8_name in "${FP8_SHARED_ENV_NAMES[@]}"; do
+    if [ "${!_fp8_name+x}" = "x" ]; then
+      export "$_fp8_name"
+      printf -v _fp8_export 'export %s=%q\n' "$_fp8_name" "${!_fp8_name}"
+    else
+      printf -v _fp8_export 'unset %s\n' "$_fp8_name"
+    fi
+    FP8_REMOTE_ENV+="$_fp8_export"
+  done
+fi
 REMOTE_SCRIPT="set -e
+$FP8_REMOTE_ENV
 mkdir -p $REMOTE_DIR $ROOT/tmp
 rm -f $REMOTE_DIR/vllm_headless.pid
 cd $ROOT
@@ -491,6 +537,7 @@ manifest = {
                                 "4 trainer ranks x 8 micro-batches = 32 groups/step exactly (5 ranks would force 30/35); "
                                 "trainer-bound (~4.2 samples/s/rank) so the 5th GPU goes to rollout (DP=5)"},
     "code_root": "$RLFORGE_V3",
+    "fp8_source_preflight": json.loads(os.environ["FP8_SOURCE_LOCAL"]) if "$FP8" == "native" else None,
     "code_md5": {os.path.basename(f): md5(f) for f in
                  sorted(__import__("glob").glob(os.path.join("$RLFORGE_PKG", "*.py")))},
     "engine": {"torch": pkg("torch"), "vllm": pkg("vllm"), "trl": pkg("trl"),
@@ -521,6 +568,8 @@ manifest = {
         "kv_cache_dtype": "$KV_DTYPE", "rollout_quantization": "poor_rl_fp8" if "$FP8" == "native" else "none",
         "trainer_fp8": "$FP8",
         "trainer_fp8_alignment": "$FP8_ALIGN",
+        "fp8_forward": os.environ.get("RLFORGE_FP8_FORWARD", "native"),
+        "fp8_shared_env": {k: os.environ.get(k) for k in "${FP8_SHARED_ENV_NAMES[*]}".split()} if "$FP8" == "native" else {},
         "fp8_graphs": os.environ.get("RLFORGE_FP8_GRAPHS", "0"),
         "fp8_graph_max_mb": os.environ.get("RLFORGE_FP8_GRAPH_MAX_MB", "1024"),
         "fp8_head_graph": os.environ.get("RLFORGE_FP8_HEAD_GRAPH", "0"),
@@ -604,6 +653,7 @@ manifest = {
     "reward": {"spec": "$REWARD", "code_md5": md5("$REWARD_FILE"), "correct": 1.0, "wrong": 0.0, "unparsed": -0.5, "truncated": -2.0,
                "ranking": "exact=+1 else 0.5/inv", "parse": "last <answer> after last </think>", "cap": int("$MAX_COMPLETION")},
     "command": "FP8=$FP8 FP8_ALIGN=$FP8_ALIGN DTYPE=$DTYPE "
+               "RLFORGE_FP8_FORWARD=${RLFORGE_FP8_FORWARD:-native} VLLM_DISABLE_COMPILE_CACHE=${VLLM_DISABLE_COMPILE_CACHE:-0} "
                "RLFORGE_FP8_GRAPHS=${RLFORGE_FP8_GRAPHS:-0} RLFORGE_FP8_GRAPH_MAX_MB=${RLFORGE_FP8_GRAPH_MAX_MB:-1024} "
                "RLFORGE_FP8_HEAD_GRAPH=${RLFORGE_FP8_HEAD_GRAPH:-0} RLFORGE_FP8_FUSE_MLP=${RLFORGE_FP8_FUSE_MLP:-1} "
                "RLFORGE_FP8_ALIGN_COMPILE=${RLFORGE_FP8_ALIGN_COMPILE:-0} "

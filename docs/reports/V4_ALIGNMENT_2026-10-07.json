@@ -1,0 +1,396 @@
+{
+  "schema": "poor-rl/v4-alignment/v1",
+  "measurement_date": "2026-10-07",
+  "repository": "poor-rl",
+  "evidence_boundary": "Diagnostic saved-token suites and one short unaligned production timing window; no long-run quality claim.",
+  "precision_contract": {
+    "master_weights": "FP32",
+    "parameter_gradients": "FP32",
+    "adam_states": "FP32",
+    "forward": "FP8 E4M3 shared trainer/rollout quantization and scales",
+    "backward": "FP8 E5M2 x E4M3 GEMMs; high-precision accumulation/writeback",
+    "sensitive": "BF16/FP32 attention, RoPE/GDN/norm/reduction according to gate variant"
+  },
+  "input_boundary": {
+    "checkpoint": "v3_1e_ckpt100_20261003",
+    "tokens_sha256": "b1137a935f3da0bdf166266f00476f74ef96f37de5f1bad12439510a3c4afec0",
+    "trainer_source_sha256": "50123f9fad7457bd840f9e35f459497f60509de362b781c6f47102b3e7ce97cc",
+    "model_after_update_sha256": "8853e8dfe998c2326212b429f314555d77d18980cfafbacb641a5fb1ffed7587",
+    "saved_token_cases": "3 prompts x 128/256 completion tokens",
+    "old_logprobs_advantages": "synthetic diagnostic values"
+  },
+  "trainer_update": {
+    "raw_file": "alignment_fp8_trainer_update_suite_v4.json",
+    "raw_sha256": "c1481328fb6789e96e1c4e6b68c4508ec823041b8b63886441af1d260271562d",
+    "scope": "Real FP8 G32 backward/Adam update with saved tokens and synthetic old-logprob/advantages; no rollout reward/quality claim",
+    "microbatch": 32,
+    "gas": 1,
+    "kl_beta": 0,
+    "updates": 1,
+    "actual_backward_mm": {
+      "torch.float8_e5m2 x torch.float8_e4m3fn": 1096
+    },
+    "master_tensors": 320,
+    "changed_master_tensors": 320,
+    "checks": {
+      "all_fp32_masters": true,
+      "all_fp32_gradients": true,
+      "all_fp32_adam_states": true,
+      "all_master_versions_increased": true,
+      "nonzero_update": true,
+      "native_fp8_backward_executed": true
+    },
+    "loss": 0.2954269051551819,
+    "passed": true,
+    "all_recorded_gradients_fp32_finite": true,
+    "master_versions_increased": true
+  },
+  "alignment_variants": {
+    "common_fp8_fp32_gdn": {
+      "raw_file": "alignment_fp8_serving_update_suite_v4.json",
+      "raw_sha256": "1afd92da4b767969b7e5407f03d8b36453870d9e841c3dbe407bce0d9f893009",
+      "cases": 6,
+      "threshold": 0.004,
+      "all_mean_gates_pass": true,
+      "all_p90_gates_pass": true,
+      "coverage_pass": true,
+      "prefill_decode_exact_all_cases": true,
+      "worst_trainer_decode_p90_abs": 1.1921138138859533e-06,
+      "worst_trainer_decode_max_abs": 1.992390025407076e-06,
+      "suite_overlay_sha256": {
+        "alignment_fp8_suite.py": "485aa0f009d2ae9262cfa7a9d09c0a6640c33b45b417a128d9c536c3ad2fe29f",
+        "alignment_bf16_rope.py": "2cfc332da9e070642c85673bb7e30215175fc819f3059164d613d807a325b0af"
+      },
+      "shared_intermediates": null,
+      "hot_reload_checks": {
+        "projection_bytes_match": true,
+        "projection_scales_match": true,
+        "head_master_fp32": true,
+        "head_master_matches": true,
+        "head_bytes_match": true,
+        "head_scales_match": true,
+        "cache_storage_preserved": true,
+        "projection_or_scales_changed": true
+      },
+      "hot_reload_passed": true,
+      "settings": {
+        "dtype": "bfloat16",
+        "quantization": "poor_rl_fp8",
+        "tensor_parallel_size": 1,
+        "max_num_seqs": 1,
+        "enable_chunked_prefill": false,
+        "enforce_eager": true,
+        "kv_cache_dtype": "auto",
+        "mamba_ssm_cache_dtype": "float32",
+        "enable_prefix_caching": false,
+        "async_scheduling": false
+      }
+    },
+    "canonical_rope": {
+      "raw_file": "alignment_fp8_serving_canonical_suite_v1.json",
+      "raw_sha256": "352bbc3d2877b35d6ed3da67dff6bb7b1085ff961b0a28edefb89e733e728896",
+      "cases": 6,
+      "threshold": 0.004,
+      "all_mean_gates_pass": true,
+      "all_p90_gates_pass": true,
+      "coverage_pass": true,
+      "prefill_decode_exact_all_cases": true,
+      "worst_trainer_decode_p90_abs": 1.1921138138859533e-06,
+      "worst_trainer_decode_max_abs": 1.992390025407076e-06,
+      "suite_overlay_sha256": {
+        "alignment_fp8_suite.py": "a6a391ce083ce8abe66689a6eff311d2dd3f404052b6bef3ede8b2559fce881c",
+        "alignment_bf16_rope.py": "2cfc332da9e070642c85673bb7e30215175fc819f3059164d613d807a325b0af",
+        "canonical_serving_rope.py": "3564a7440e2504f38e1a328523f08dc00095a0fbb1cd95d497825ad8852d8ac8"
+      },
+      "shared_intermediates": null,
+      "hot_reload_checks": {
+        "projection_bytes_match": true,
+        "projection_scales_match": true,
+        "head_master_fp32": true,
+        "head_master_matches": true,
+        "head_bytes_match": true,
+        "head_scales_match": true,
+        "cache_storage_preserved": true,
+        "projection_or_scales_changed": true
+      },
+      "hot_reload_passed": true,
+      "settings": {
+        "dtype": "bfloat16",
+        "quantization": "poor_rl_fp8",
+        "tensor_parallel_size": 1,
+        "max_num_seqs": 1,
+        "enable_chunked_prefill": false,
+        "enforce_eager": true,
+        "kv_cache_dtype": "auto",
+        "mamba_ssm_cache_dtype": "float32",
+        "enable_prefix_caching": false,
+        "async_scheduling": false
+      }
+    },
+    "shared_bf16_gdn": {
+      "raw_file": "alignment_fp8_serving_bf16gdn_suite_v1.json",
+      "raw_sha256": "8c67b9ddeed35d2d6645f56ff223a3b0e322f6f38a2ee185894e51457b3d0311",
+      "cases": 6,
+      "threshold": 0.004,
+      "all_mean_gates_pass": true,
+      "all_p90_gates_pass": true,
+      "coverage_pass": true,
+      "prefill_decode_exact_all_cases": true,
+      "worst_trainer_decode_p90_abs": 1.311288997385418e-06,
+      "worst_trainer_decode_max_abs": 1.9073468138230965e-06,
+      "suite_overlay_sha256": {
+        "alignment_fp8_suite.py": "41862a52fb3996674f0fc44874a4b1a674601c28f5ba15d6c91f80ceb2360201",
+        "alignment_bf16_rope.py": "2cfc332da9e070642c85673bb7e30215175fc819f3059164d613d807a325b0af",
+        "canonical_serving_rope.py": "3564a7440e2504f38e1a328523f08dc00095a0fbb1cd95d497825ad8852d8ac8",
+        "shared_bf16_gdn_probe.py": "8a35796c5a51280a727f0b7b48c1368cc0ce98cd461a98c5e83d525cb4a7a985"
+      },
+      "shared_intermediates": "BF16 on both trainer and serving; FP32 state/gates/accumulation",
+      "hot_reload_checks": {
+        "projection_bytes_match": true,
+        "projection_scales_match": true,
+        "head_master_fp32": true,
+        "head_master_matches": true,
+        "head_bytes_match": true,
+        "head_scales_match": true,
+        "cache_storage_preserved": true,
+        "projection_or_scales_changed": true
+      },
+      "hot_reload_passed": true,
+      "settings": {
+        "dtype": "bfloat16",
+        "quantization": "poor_rl_fp8",
+        "tensor_parallel_size": 1,
+        "max_num_seqs": 1,
+        "enable_chunked_prefill": false,
+        "enforce_eager": true,
+        "kv_cache_dtype": "auto",
+        "mamba_ssm_cache_dtype": "float32",
+        "enable_prefix_caching": false,
+        "async_scheduling": false
+      }
+    }
+  },
+  "trainer_bf16_gdn_update": {
+    "raw_file": "alignment_fp8_trainer_bf16gdn_suite_v1.json",
+    "raw_sha256": "04d137140a1dc20c11f1e8e235f4c35fd2c0c9e44ec9037192ea5d21f9f0ef8b",
+    "shared_intermediates": "BF16 on both trainer and serving; FP32 state/gates/accumulation",
+    "actual_backward_mm": {
+      "torch.float8_e5m2 x torch.float8_e4m3fn": 1096
+    },
+    "changed_master_tensors": 320,
+    "passed": true,
+    "model_after_update_sha256": "d51cdf3e60eecdcac8f48db28438ea81a6af91331015253b8ec2d4bccc167613",
+    "all_recorded_gradients_fp32_finite": true
+  },
+  "production_window": {
+    "raw_collector": "v4_noref_dp6_dgrad_queuetrace_cap320_act120_v3.collector.json",
+    "collector_sha256": "a59b5641d3290bf036a6537f97a49e63d96658e1c8be9fb18b3997b1f81b3cf7",
+    "raw_log": "results/v4_noref_dp6_dgrad_queuetrace_cap320_act120_v3/log_history.json",
+    "log_sha256": "0e3d1812f420283a299176b29e875b5941cb9438f39c755bc789e25728d1a126",
+    "run_sha256": "9eb9a15be8b3581b85c56475f6d8b441ea91526b24381741a549d3de533b0b08",
+    "drop_audit_sha256": "dfd0773397c69ae7ef9651607af9b766317630e23907f59647b028754c86b5b3",
+    "run": "v4_noref_dp6_dgrad_queuetrace_cap320_act120_v3",
+    "status": "completed_unaligned_production",
+    "gpu_layout": {
+      "trainer": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "rollout": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "rollout_mode": "DP6 TP1",
+      "remote_rollout_gpus": "5,6",
+      "reference_endpoints": [],
+      "physical_h200": 10
+    },
+    "physical_h200": 10,
+    "steps": [
+      4,
+      5,
+      6
+    ],
+    "completion_tokens": 27367325,
+    "wall_s": 184.10187980625778,
+    "tokens_per_s": 148653.15350826614,
+    "v1_factor": 75.38192368573334,
+    "strongest_bf16_factor": 2.76869688898317,
+    "median_step_s": 61.02428859844804,
+    "time_s": {
+      "perf/fwd_bwd_s": 145.78756663110107,
+      "perf/rollout_wait_s": 25.289862632751465,
+      "perf/weight_sync_s": 0.7970540523529053,
+      "perf/optimizer_s": 0.006678521633148193
+    },
+    "time_fractions": {
+      "perf/fwd_bwd_s": 0.7918852690940619,
+      "perf/rollout_wait_s": 0.1373688452250765,
+      "perf/weight_sync_s": 0.004329418326372856,
+      "perf/optimizer_s": 3.6276227272510364e-05
+    },
+    "wall_mfu_percent": 11.36550046848097,
+    "compute_mfu_percent": 14.352458508899161,
+    "mfu_type": "workload-shape proxy, mixed-precision useful peak-equivalent; policy trainer only",
+    "first_step_logrho_p90_milli": 14.124548062682152,
+    "production_forward_alignment": false,
+    "clip": {
+      "sequence_low_mean": 0.9519856774162563,
+      "sequence_high_mean": 0.0007324218671045953,
+      "token_low_mean": 0.16977819342212522,
+      "token_high_mean": 0.09260638809297099
+    },
+    "mfu_formula": "sum(useful_FLOPs_dtype/dense_peak_dtype)/(trainer_GPU_count*window_wall_s)",
+    "mfu_shape_sha256": "bda53aea26f0530b2417762e8d3072bf1f331d3672f41e00afb4a405e9e349a9",
+    "whole_model_mfu_measured": false
+  },
+  "isolated_primitives": {
+    "gdn_batch64": {
+      "raw_file": "gdn_batch64_v1.json",
+      "raw_sha256": "d0caa0c0478f54292dba705152d812000d8bec4b5cb090982f0f7e3a995807c8",
+      "scope": "Isolated slot-addressed shared GDN primitive, actual prepared tensors; no model/API/production RL",
+      "passed": true,
+      "batch32_wall_speedup": 23.818813797452187,
+      "e2e": false
+    },
+    "shared_bf16_gdn": {
+      "raw_file": "shared_bf16_gdn_primitive_v1.json",
+      "raw_sha256": "1fdaeacb90964fb540ad5784177e35e97df8bb761c3842e19d888f8d0bbf2afd",
+      "scope": "Actual prepared layer0 GDN primitive; both-policy BF16 intermediates with chunk64 causal replay; no model/E2E/update claim",
+      "passed": true,
+      "fp32_ms": 3.091360092163086,
+      "bf16_ms": 0.9172160029411316,
+      "speedup": 3.3703730443541926,
+      "e2e": false
+    },
+    "head_accumulation": {
+      "raw_file": "head_accum_all_model_v1.json",
+      "raw_sha256": "2bf767e53826a14181fa3850d180e7d2a0f5fed740969d933cfa329eee91c9f0",
+      "scope": "One reserved H200, fixed historical token fixture, frozen FP8 beta0 GSPO, no DDP/rollout/judge; zero policy updates.",
+      "compute_speedup": 1.012097609080237,
+      "fp32_compute": true,
+      "e2e": false
+    }
+  },
+  "paired_model_profiles": {
+    "shared_gdn_model_compute": {
+      "raw_file": "shared_gdn_model_compute_v1.json",
+      "raw_sha256": "c9c074920b23048a145aff49062b507678a23b2e053248cd3217699dee6ffe3a",
+      "scope": "Single H200 real historical G32; same FP8 projection/head and paired shared GDN; no DDP/rollout/quality claim",
+      "completion_tokens": 58248,
+      "microbatch": 32,
+      "gas": 1,
+      "arms": {
+        "shared_fp32_gdn_diagnostic": {
+          "median_compute_ms": 13429.8408203125,
+          "median_total_wall_ms": 13438.834288157523
+        },
+        "shared_bf16_gdn": {
+          "median_compute_ms": 1762.0146484375,
+          "median_total_wall_ms": 1770.5951547250152
+        }
+      },
+      "compute_speedup_fp32_to_bf16": 7.621870000000001,
+      "total_wall_speedup_fp32_to_bf16": 7.59001,
+      "not_production_fp8_speedup": true
+    },
+    "gdn_fp8_backward_candidate": {
+      "raw_file": "common_gdn_backward_model_sharedbf16_v3.json",
+      "raw_sha256": "d8b54edaeac03ac4a0e1141c522cae81f5918046e9883bd253e79a3122afaaa1",
+      "scope": "Shared BF16 GDN full-model G32; FP8 dq/dv candidate",
+      "native_bf16_ms": 829.8882446289062,
+      "fp8_dq_ms": 829.1296997070312,
+      "fp8_dq_dv_ms": 838.4446411132812,
+      "fp8_dq_gradient_relative_l2": 0.18001376878934525,
+      "fp8_dq_dv_gradient_relative_l2": 0.20015522912719025,
+      "fp8_dq_gradient_cosine": 0.9840054443460332,
+      "fp8_dq_dv_gradient_cosine": 0.9802527033169037,
+      "passed": false,
+      "decision": "not promoted: no full-model net speed gain and gradient direction error exceeds native repeat"
+    }
+  },
+  "batch_serving_gate": {
+    "raw_file": "gdn_batch64_model_v3.json",
+    "raw_sha256": "c0bc10105bfebe8d5900af61eb2472aa0d43285e4afac68999611234db041299",
+    "scope": "Experimental full-model shared FP8 projection/head, pointwise, FA3 and BF16 GDN concurrency gate; no production throughput claim",
+    "request_cases": "3 requests x 2 completion lengths x 2 request orders",
+    "max_trainer_decode_p90_abs": 1.311288997385418e-06,
+    "max_trainer_decode_abs": 1.9073468138230965e-06,
+    "parallel_prefill_decode_passed": true,
+    "shared_projection_module": "common_fp8_forward_prototype",
+    "shared_head_module": "common_fp8_forward_prototype",
+    "explicit_native_cache_reset_passed": false,
+    "reset_failure": "Inplace update to inference tensor outside InferenceMode is not allowed",
+    "production_e2e": false
+  },
+  "limitations": [
+    "Six-case suites are single-request eager TP1 with BF16 KV and FP32 recurrent state; prefix/chunked prefill/async scheduling are disabled.",
+    "The common stack is not yet the production 4+6 path; latest 148653 token/s window is explicitly unaligned.",
+    "MFU is a mixed-precision useful-work shape proxy, not a whole-model hardware counter.",
+    "Synthetic old logprobs/advantages and saved tokens do not establish reward, DDP or long-run learning equivalence."
+  ],
+  "raw_files": {
+    "trainer_fp8_update": {
+      "path": "alignment_fp8_trainer_update_suite_v4.json",
+      "sha256": "c1481328fb6789e96e1c4e6b68c4508ec823041b8b63886441af1d260271562d"
+    },
+    "serving_fp8_update": {
+      "path": "alignment_fp8_serving_update_suite_v4.json",
+      "sha256": "1afd92da4b767969b7e5407f03d8b36453870d9e841c3dbe407bce0d9f893009"
+    },
+    "serving_canonical_rope": {
+      "path": "alignment_fp8_serving_canonical_suite_v1.json",
+      "sha256": "352bbc3d2877b35d6ed3da67dff6bb7b1085ff961b0a28edefb89e733e728896"
+    },
+    "trainer_shared_bf16_gdn": {
+      "path": "alignment_fp8_trainer_bf16gdn_suite_v1.json",
+      "sha256": "04d137140a1dc20c11f1e8e235f4c35fd2c0c9e44ec9037192ea5d21f9f0ef8b"
+    },
+    "serving_shared_bf16_gdn": {
+      "path": "alignment_fp8_serving_bf16gdn_suite_v1.json",
+      "sha256": "8c67b9ddeed35d2d6645f56ff223a3b0e322f6f38a2ee185894e51457b3d0311"
+    },
+    "gdn_batch64_primitive": {
+      "path": "gdn_batch64_v1.json",
+      "sha256": "d0caa0c0478f54292dba705152d812000d8bec4b5cb090982f0f7e3a995807c8"
+    },
+    "shared_bf16_gdn_primitive": {
+      "path": "shared_bf16_gdn_primitive_v1.json",
+      "sha256": "1fdaeacb90964fb540ad5784177e35e97df8bb761c3842e19d888f8d0bbf2afd"
+    },
+    "head_accum_primitive": {
+      "path": "head_accum_all_model_v1.json",
+      "sha256": "2bf767e53826a14181fa3850d180e7d2a0f5fed740969d933cfa329eee91c9f0"
+    },
+    "production_collector": {
+      "path": "v4_noref_dp6_dgrad_queuetrace_cap320_act120_v3.collector.json",
+      "sha256": "a59b5641d3290bf036a6537f97a49e63d96658e1c8be9fb18b3997b1f81b3cf7"
+    },
+    "production_log": {
+      "path": "results/v4_noref_dp6_dgrad_queuetrace_cap320_act120_v3/log_history.json",
+      "sha256": "0e3d1812f420283a299176b29e875b5941cb9438f39c755bc789e25728d1a126"
+    },
+    "production_run": {
+      "path": "results/v4_noref_dp6_dgrad_queuetrace_cap320_act120_v3/run.json",
+      "sha256": "9eb9a15be8b3581b85c56475f6d8b441ea91526b24381741a549d3de533b0b08"
+    },
+    "production_drop_audit": {
+      "path": "results/v4_noref_dp6_dgrad_queuetrace_cap320_act120_v3/drop_audit.jsonl",
+      "sha256": "dfd0773397c69ae7ef9651607af9b766317630e23907f59647b028754c86b5b3"
+    },
+    "production_mfu_shape": {
+      "path": "../fp8_sprint_20261005/whole_model_mfu_shape_audit.json",
+      "sha256": "bda53aea26f0530b2417762e8d3072bf1f331d3672f41e00afb4a405e9e349a9"
+    }
+  },
+  "deployment_status": {
+    "canonical_opt_in": "RLFORGE_FP8_ROPE_BF16=1 (serving_rope.py)",
+    "common_gdn_pointwise_fa3": "experimental diagnostic stack, not integrated production batch-serving",
+    "remote_entrypoint": "shared venv lacks installed poor_rl_fp8 metadata; diagnostics call register explicitly",
+    "launcher_gpu_run_with_this_new_common_stack": false
+  }
+}

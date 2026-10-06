@@ -2,6 +2,7 @@
 
 Registered through the ``vllm.general_plugins`` entry point. Select
 ``--quantization poor_rl_fp8`` with TP=1 and BF16 KV/recurrent state.
+Set ``RLFORGE_FP8_ROPE_BF16=1`` to share BF16 RoPE product rounding.
 """
 
 import os
@@ -121,6 +122,11 @@ def _shared_scaled_mm(self, *, A, B, out_dtype, As, Bs, bias, output_shape):
 
 
 class MasterFP8Config(QuantizationConfig):
+    def __init__(self):
+        if os.environ.get("RLFORGE_FP8_ROPE_BF16") == "1":
+            from rlforge.serving_rope import install
+            install()
+
     @classmethod
     def get_name(cls):
         return "poor_rl_fp8"

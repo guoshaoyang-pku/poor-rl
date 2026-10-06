@@ -1,9 +1,10 @@
 # Recipe: native FP8 training and rollout (experimental)
 
 H200 / SM90, dense Qwen3.5-0.8B, rollout TP=1. This implements FP8 full-parameter
-GEMMs with FP32 master weights, gradient accumulation and Adam states. The BF16
-production recipe remains the default. The decode alignment gate still fails;
-short throughput measurements do not establish long-run learning quality.
+GEMMs with FP32 master weights, gradients and Adam states. The BF16 production
+recipe remains the default. A new six-case single-request diagnostic passes the
+common FP8 forward path after an actual FP32 Adam update; production batch serving
+integration and long-run learning quality are still unvalidated.
 
 Tested environment: PyTorch 2.13.0+cu130, vLLM 0.30.0, Transformers 5.17.0.
 
@@ -12,10 +13,10 @@ Tested environment: PyTorch 2.13.0+cu130, vLLM 0.30.0, Transformers 5.17.0.
 | Part | Precision / implementation |
 |---|---|
 | Master weights, `.grad`, Adam moments | FP32; normal parameter objects and checkpoint keys preserved |
-| Linear and LM head forward | E4M3; per-token activation / per-output-channel weight scales; shared native CUTLASS GEMM |
+| Linear and LM head forward | E4M3; per-token activation / per-output-channel weight scales; the same backend on both sides (`RLFORGE_FP8_FORWARD=native` CUTLASS or `torch` scaled-mm; the six-case gate used `torch`) |
 | Linear and LM head backward | E5M2 gradient operands, E4M3 weight/activation operands; native `torch._scaled_mm` with FP32 output and `use_fast_accum=False` |
 | Weight updates and rollout reload | Quantize directly from FP32 masters; versioned trainer caches; serving refreshes weight/scales in place, including tied LM head |
-| Sensitive operations | BF16/FP32 attention, norms, loss/reductions and recurrent state; GDN `in_proj_a/b`, vision and unaligned projections excluded |
+| Sensitive operations | BF16/FP32 attention, norms, loss/reductions and recurrent state; GDN state/gates/accumulation remain FP32 in the common probe; GDN FP8 backward candidates are not promoted |
 | MLP | Fused gate/up projection, enabled by default (`RLFORGE_FP8_FUSE_MLP=1`) |
 | Trainer CUDA graphs | Stateless copies, fresh outputs, bounded cache; Linear and head graph replay both **off by default** |
 | Aligned convolution | Optional `RLFORGE_FP8_ALIGN_COMPILE=1`; compile BF16-rounded tap products/sum, retain eager SiLU; **off by default** |
@@ -23,15 +24,17 @@ Tested environment: PyTorch 2.13.0+cu130, vLLM 0.30.0, Transformers 5.17.0.
 | Compact norm backward | Optional `RLFORGE_FP8_ALIGN_BACKWARD=1`; save BF16 inputs and small FP32 norms, recompute and compile RMS/gated RMS/Q/K gradients; reuse the same forward; **off by default** |
 | Variable token lengths | Runtime Triton token dimensions; reuse quantization kernels across lengths, with unchanged FP8 bytes/scales |
 | Optimizer cache invalidation | Post-step hook advances master versions even for fused AdamW, refreshing Linear, fused gate/up and LM-head caches |
+| RoPE alignment | Optional `RLFORGE_FP8_ROPE_BF16=1`; serving uses BF16 RoPE product rounding to match the trainer; shared GDN/pointwise/FA3 still require the experimental diagnostic stack |
 
 Forward quantization is stateless: `scale = max(amax / 448, 1 / (448 × 512))`,
 with true division before E4M3 rounding. Weight and activation bytes/scales were
-checked against vLLM PTPC. Trainer and rollout use the same forward quantization
-and GEMM, while the surrounding model operations still require numerical gates.
+checked against vLLM PTPC. Trainer and rollout use the same forward quantization,
+backend and GEMM; the surrounding model operations still require numerical gates.
 
 Code: [`fp8.py`](../src/rlforge/fp8.py), [`fp8_serving.py`](../src/rlforge/fp8_serving.py),
 [`fast_logprob.py`](../src/rlforge/fast_logprob.py),
-[`fp8_alignment.py`](../src/rlforge/fp8_alignment.py).
+[`fp8_alignment.py`](../src/rlforge/fp8_alignment.py),
+[`serving_rope.py`](../src/rlforge/serving_rope.py).
 
 ## Launch and alignment
 
@@ -63,8 +66,52 @@ only reuse of the disk compilation cache is disabled.
 `FP8_ALIGN=vllm` adds Qwen3.5 BF16 rounding/GDN changes and selects
 `--additional-config '{"gdn_prefill_backend":"triton"}'` on rollout. Keep the
 same GSPO clip settings as the matched control; alignment is experimental.
+For the common-forward diagnostic, set `RLFORGE_FP8_FORWARD=torch` and
+`RLFORGE_FP8_ROPE_BF16=1` in both environments; selecting `native` is also valid
+when the same vLLM CUTLASS backend is installed on both sides. The production
+launcher `scripts/aiq/run_g32_v3_2.sh` performs a read-only plugin/checkpoint
+preflight. The shared remote venv used for the diagnostics lacked the installed
+plugin entry point; the diagnostic workers called plugin registration explicitly.
 
-## Earlier fixed-batch gates (2026-10-05)
+## Latest narrow alignment gate (2026-10-07)
+
+The gate uses the same saved tokens, checkpoint and quantized weights on the
+trainer and serving worker. It runs one real G32, GAS1 FP8 backward/FP32 Adam
+update, hot-reloads the resulting checkpoint, then compares trainer, prefill and
+decode logprobs for three prompts at 128 and 256 completion tokens.
+
+| Variant | Cases | Worst trainer/decode P90 | Worst absolute error | Prefill/decode | Result |
+|---|---:|---:|---:|---|---|
+| FP8 projections/head, common FP32 GDN | 6 | 1.19e-6 | 1.99e-6 | exact in all 6 | pass |
+| Canonical repository RoPE module | 6 | 1.19e-6 | 1.99e-6 | exact in all 6 | pass |
+| Shared BF16 GDN intermediates, FP32 state/gates/accumulation | 6 | 1.31e-6 | 1.91e-6 | exact in all 6 | pass |
+
+The trainer update executed 1,096 E5M2×E4M3 FP8 backward GEMMs. All 320
+master tensors changed; masters, gradients and Adam states were finite FP32.
+The serving hot-reload checks for projection bytes/scales, tied head master and
+cache storage passed. Same-weight GSPO epsilon probes were numerical checks with
+hypothetical advantage signs, not production clip statistics. The suite is
+single-request, eager, TP1, BF16 KV, FP32 recurrent state, with prefix caching,
+chunked prefill and async scheduling disabled. Saved old logprobs/advantages are
+synthetic, so this is not a reward, DDP or total 4+6 throughput result.
+
+Evidence and source hashes: [`V4_ALIGNMENT_2026-10-07.json`](reports/V4_ALIGNMENT_2026-10-07.json).
+
+The paired model profile found that a shared FP32 IEEE GDN diagnostic took
+13,429.84 ms for the same G32, while shared BF16 GDN took 1,762.01 ms (7.62×).
+This isolates an old diagnostic path and is not an FP8 production speedup. A
+separate full-model FP8 GDN backward candidate measured 829.13 ms for FP8 dq
+and 838.44 ms for FP8 dq+dv versus 829.89 ms native BF16; its whole-model
+gradient relative L2 was 0.180 and 0.200, so it remains rejected.
+
+The experimental full-model adapter ran three simultaneous requests in two
+orders at 128 and 256 completion tokens. Shared FP8 projection/head, pointwise,
+FA3 and BF16 GDN outputs matched the single-request references; worst
+trainer/decode P90 was 1.31e-6 and worst absolute error 1.91e-6. The explicit
+native-cache reset then failed on vLLM's inference-tensor protection, so this is
+a numerical concurrency gate, not production batch-serving readiness.
+
+## Earlier fixed-batch gates (2026-10-05, historical)
 
 One H200, same checkpoint and 32 fixed historical completions, shared-prefix
 forward/backward with activation checkpointing; 24,514 completion tokens.
@@ -215,7 +262,7 @@ existing backward variation. Two-rank, two-microbatch `no_sync`/allreduce and
 actual fused-Adam FP32 updates passed. This does not remove the prefill/decode
 forward discrepancy or validate long-run learning.
 
-A further fixed-token probe tested three prompts at 128 and 256 completions.
+The earlier fixed-token probe tested three prompts at 128 and 256 completions.
 Both arms replayed exactly the same saved tokens with raw logprobs and unchanged
 FP32 weights. Original vLLM prefill passed 2/6 sequence-mean gates; substituting
 the trainer's installed FLA prefill passed 4/6, leaving means +0.004157 and
