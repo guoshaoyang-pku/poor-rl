@@ -330,7 +330,7 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         adv = advantages[0]
         per_token_loss = -torch.min(rho_tok * adv, rho_clip_tok * adv)
 
-        global_n_tokens = inputs["global_n_tokens"][0]
+        global_n_tokens = inputs["global_n_tokens"][0].float()
         if self._gspo_norm == "seq_mean":
             # Uniform per sequence: mean over each sequence's completion tokens, then
             # mean over sequences. pdb is one full group, so num_seq is constant across
@@ -503,7 +503,7 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         n_forward_tokens = float(inputs["global_n_forward_tokens"][0])
         mean_seq_len = float(inputs["mean_seq_len"][0])
         self._step_forward_tokens += n_forward_tokens
-        self._step_trained_tokens += float(global_n_tokens)
+        self._step_trained_tokens += float(inputs["global_n_tokens"][0])
         self._step_seq_len_weighted += mean_seq_len * n_forward_tokens
         self._step_samples += n_forward_tokens / mean_seq_len
         self._step_forward_s += self._last_forward_time_s
@@ -660,58 +660,54 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         self._step_forward_s += self._last_forward_time_s
         return loss
 
-    def _loss_metrics(self, log_ratio, entropy, advantages, completion_mask, seq_ids, num_seq, seq_mean_lr, rho,
-                      low_bound, kl_seq_mean):
-        """The v3_1 compute_loss metric block, verbatim (same collectives in the same order)."""
-        coef_1_stat = torch.exp(log_ratio)
-        valid_mask = completion_mask > 0
-        local_count = valid_mask.sum().float()
-        local_ratio_sum = coef_1_stat[valid_mask].sum()
-        local_kl_sum = ((coef_1_stat[valid_mask] - 1) - log_ratio[valid_mask]).sum()
-        local_entropy_sum = entropy[valid_mask].sum()
-        is_low_clipped = (coef_1_stat < 1 - self.epsilon_low) & (advantages < 0)
-        is_high_clipped = (coef_1_stat > 1 + self.epsilon_high) & (advantages > 0)
-        is_region_clipped = is_low_clipped | is_high_clipped
-        stats = torch.stack([local_ratio_sum, local_kl_sum, local_entropy_sum,
-                             is_low_clipped[valid_mask].float().sum(), is_high_clipped[valid_mask].float().sum(),
-                             is_region_clipped[valid_mask].float().sum(), local_count])
-        stats = self.accelerator.reduce(stats, reduction="sum")
-        (g_ratio, g_kl, g_ent, g_low, g_high, g_region, g_count) = stats.unbind(0)
-        m = self._metrics["train"]
-        m["ratio"].append((g_ratio / g_count).item())
-        m["kl"].append((g_kl / g_count).item())
-        if kl_seq_mean is not None:
-            m["kl_ref"].append(self.accelerator.gather(kl_seq_mean.detach().float().reshape(1)).mean().item())
-        m["entropy"].append((g_ent / g_count).item())
-        m["clip_ratio/low_mean"].append((g_low / g_count).item())
-        m["clip_ratio/high_mean"].append((g_high / g_count).item())
-        m["clip_ratio/region_mean"].append((g_region / g_count).item())
-        m["gspo/rho_mean"].append(rho.detach().mean().item())
-        abs_log_rho = seq_mean_lr.detach().abs()
-        seq_stats = torch.stack([(rho < low_bound).float().mean(), (rho > 1 + self.epsilon_high).float().mean(),
-                                 abs_log_rho.mean(), abs_log_rho.max()])
-        m["gspo/seq_clip_low_frac"].append(self.accelerator.reduce(seq_stats[0], reduction="mean").item())
-        m["gspo/seq_clip_high_frac"].append(self.accelerator.reduce(seq_stats[1], reduction="mean").item())
-        m["gspo/abs_log_rho_mean"].append(self.accelerator.reduce(seq_stats[2], reduction="mean").item())
-        m["gspo/abs_log_rho_max"].append(self.accelerator.reduce(seq_stats[3], reduction="max").item())
+    def _loss_metrics(self, log_ratio, entropy, advantages, completion_mask, seq_ids, num_seq,
+                      seq_mean_lr, rho, low_bound, kl_seq_mean):
+        ratio = torch.exp(log_ratio)
+        valid = completion_mask > 0
+        low = (ratio < 1 - self.epsilon_low) & (advantages < 0)
+        high = (ratio > 1 + self.epsilon_high) & (advantages > 0)
+        stats = torch.stack([
+            ratio[valid].sum(), ((ratio[valid] - 1) - log_ratio[valid]).sum(),
+            entropy[valid].sum(), low[valid].float().sum(), high[valid].float().sum(),
+            (low | high)[valid].float().sum(), valid.sum().float(),
+        ])
         slr = seq_mean_lr.detach().float()
-        extra = torch.stack([slr.mean(), torch.quantile(slr.abs(), 0.5), torch.quantile(slr.abs(), 0.9)])
-        extra = self.accelerator.reduce(extra, reduction="mean")
-        m["gspo/log_rho_mean"].append(extra[0].item())
-        m["gspo/abs_log_rho_p50"].append(extra[1].item())
-        m["gspo/abs_log_rho_p90"].append(extra[2].item())
+        abs_slr = seq_mean_lr.detach().abs()
+        comp = completion_mask[0].float()
+        counts = torch.zeros(num_seq, device=comp.device).index_add_(0, seq_ids, comp)
+        seq_low = torch.zeros_like(counts).index_add_(0, seq_ids, low[0].float() * comp) / counts
+        seq_high = torch.zeros_like(counts).index_add_(0, seq_ids, high[0].float() * comp) / counts
+        local = torch.stack([
+            *stats.unbind(),
+            kl_seq_mean.detach().float() if kl_seq_mean is not None else slr.new_zeros(()),
+            (rho < low_bound).float().mean(), (rho > 1 + self.epsilon_high).float().mean(),
+            abs_slr.mean(), abs_slr.max(), slr.mean(),
+            torch.quantile(slr.abs(), .5), torch.quantile(slr.abs(), .9),
+            nanmin(seq_low), nanmax(seq_high), rho.detach().mean(),
+        ])
+        gathered = self.accelerator.gather(local).reshape(self.accelerator.num_processes, -1)
+        g_ratio, g_kl, g_ent, g_low, g_high, g_region, g_count = gathered[:, :7].sum(0).unbind()
+        values = torch.stack([
+            g_ratio / g_count, g_kl / g_count, g_ent / g_count,
+            g_low / g_count, g_high / g_count, g_region / g_count,
+            gathered[:, 7].mean(), gathered[:, 8].mean(), gathered[:, 9].mean(),
+            gathered[:, 10].mean(), gathered[:, 11].max(), gathered[:, 12].mean(),
+            gathered[:, 13].mean(), gathered[:, 14].mean(),
+            nanmin(gathered[:, 15]), nanmax(gathered[:, 16]), local[17],
+        ])
+        names = [
+            'ratio', 'kl', 'entropy', 'clip_ratio/low_mean', 'clip_ratio/high_mean',
+            'clip_ratio/region_mean', 'kl_ref', 'gspo/seq_clip_low_frac',
+            'gspo/seq_clip_high_frac', 'gspo/abs_log_rho_mean', 'gspo/abs_log_rho_max',
+            'gspo/log_rho_mean', 'gspo/abs_log_rho_p50', 'gspo/abs_log_rho_p90',
+            'clip_ratio/low_min', 'clip_ratio/high_max', 'gspo/rho_mean',
+        ]
+        sink = self._metrics['train']
+        for name, value in zip(names, values.detach().cpu().tolist()):
+            if name != 'kl_ref' or kl_seq_mean is not None:
+                sink[name].append(value)
         if self._dyn_low_frac > 0 and self._dyn_low_ema is not None:
-            m["gspo/dyn_low_bound"].append(float(torch.exp(self._dyn_low_ema)))
-        comp_mask = completion_mask[0].float()
-
-        def seg_sum(vals):
-            return torch.zeros(num_seq, device=comp_mask.device).index_add_(0, seq_ids, vals)
-
-        seq_tokens = seg_sum(comp_mask)
-        per_seq_low = seg_sum(is_low_clipped[0].float() * comp_mask) / seq_tokens
-        per_seq_high = seg_sum(is_high_clipped[0].float() * comp_mask) / seq_tokens
-        m["clip_ratio/low_min"].append(nanmin(self.accelerator.gather(nanmin(per_seq_low))).item())
-        m["clip_ratio/high_max"].append(nanmax(self.accelerator.gather(nanmax(per_seq_high))).item())
+            sink['gspo/dyn_low_bound'].append(float(torch.exp(self._dyn_low_ema)))
 
 
 def _apply_liger_base_kernels(model_path: str) -> None:
@@ -771,6 +767,10 @@ def main():
     ap.add_argument("--lr", type=float, default=2e-6)
     ap.add_argument("--num-generations", type=int, default=16)
     ap.add_argument("--completions-per-step", type=int, default=256)
+    ap.add_argument("--microbatch-per-rank", type=int, default=None,
+                    help="actual samples per rank per backward; default is --num-generations")
+    ap.add_argument("--exact-token-counts", action="store_true",
+                    help="int64 rollout token metadata on the supported TRL collator; fail on source mismatch")
     ap.add_argument("--max-completion", type=int, default=16384)
     ap.add_argument("--max-staleness", type=int, default=4)
     ap.add_argument("--max-inflight-tasks", type=int, default=128)
@@ -899,6 +899,17 @@ def main():
                          "(hung reward/judge; TRL's check_health then stops the run). Default: env "
                          "RLFORGE_SCORE_TASK_MAX_S, else max(600, 3 x AIQ_HALLUC_TIMEOUT_S).")
     args = ap.parse_args()
+    pdb = args.num_generations if args.microbatch_per_rank is None else args.microbatch_per_rank
+    if args.num_generations <= 0 or pdb <= 0 or args.completions_per_step <= 0:
+        ap.error("generation count, microbatch and completions per step must be positive")
+    if pdb % args.num_generations:
+        ap.error("--microbatch-per-rank must contain whole generation groups")
+    if args.completions_per_step % pdb:
+        ap.error("--completions-per-step must be divisible by the per-rank microbatch")
+    gas = args.completions_per_step // pdb
+    if args.exact_token_counts:
+        from rlforge.exact_counts import install as install_exact_counts
+        install_exact_counts()
     if args.fp8_align != "off" and args.fp8 != "native":
         raise SystemExit("--fp8-align vllm requires --fp8 native")
 
@@ -932,9 +943,6 @@ def main():
 
     rows = [json.loads(line) for line in open(args.train)]
     ds = Dataset.from_list(rows)
-
-    pdb = args.num_generations  # one full group per micro-batch
-    gas = max(1, args.completions_per_step // pdb)
 
     report_to = [] if args.report_to in ("none", "") else args.report_to.split(",")
 

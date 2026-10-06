@@ -49,4 +49,6 @@ FP8完整混合精度MFU暂无，不能套用BF16峰值。本轮数据与源码�
 
 可选原生logprob缓存已集成为`RLFORGE_SERVING_LOGPROBS_CACHE=1`（默认关闭，安装包后由vLLM general plugin加载）；58,262位置的原生字段、UTF-8及累计logprob逐值一致，main／spawn均通过。开启时需使用记录的vLLM源码版本；stream／top-K／echo等请求回到原生路径。
 
+主入口支持`--num-generations 32 --completions-per-step 1024 --microbatch-per-rank 1024 --exact-token-counts`，即每卡真实microbatch 1024、GAS=1。指标通信由8–9次合成1次；四卡NCCL的64组对照最大差1.2×10⁻¹⁰，G32分组和样本字段保持一致。整数计数仅在显式开启时应用，要求记录的TRL源码版本；其余FP8实验配方仍见源码包。
+
 同八卡对齐实测，v3.2总吞吐是v1的**27.2倍**；同4＋5卡历史记录，v3.1e→v3.2提高**1.72倍**。

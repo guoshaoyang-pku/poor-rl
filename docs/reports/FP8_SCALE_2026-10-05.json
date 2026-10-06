@@ -4720,5 +4720,46 @@
       "cpu_gate_sha256": "e74d31e45dbabf44d716bfa0995d666e32e8fabe89675595efb048f9f8dfcc0c",
       "native_loader_gate_sha256": "b24b70bfd339c98ab34b0b5cb49e486d8ef6e7c4e1ae6fa9dcf25bd79f2dc47e"
     }
+  },
+  "canonical_microbatch_metrics_integration": {
+    "scope": "Publictrainer microbatch CLI, batcheddiagnosticcollective, optional int64rolloutcounters. NoGPUforwardarithmetic orrewardchange; thisdoesnotintegrateall136kt/srecipe.",
+    "source_sha256": {
+      "src/rlforge/trainer.py": "df6317a07e2b3f103a723e9459fa8c046564d58f2aa3a3133204071d4fc3ed5f",
+      "src/rlforge/exact_counts.py": "74f3c238c5d105215e5d5952438025e96733b01e223f624695aa2423d34d58aa",
+      "tests/test_exact_counts.py": "93f69021d7ade58edb93aff2765ff69946ade26b597adfc59fd7151bcaa8634c"
+    },
+    "cpu_cases": 16,
+    "nccl_world_size": 4,
+    "nccl_metric_cases": 64,
+    "nccl_metric_max_abs_error": 1.1641532182693481e-10,
+    "collectives_before": [
+      8,
+      9
+    ],
+    "collectives_after": 1,
+    "actual_microbatch_per_rank": 1024,
+    "gradient_accumulation": 1,
+    "global_samples": 4096,
+    "group_size": 32,
+    "native_distributed_collator_values_exact": true,
+    "group_metadata_isolation": true,
+    "int64_counter_gate_counts": [
+      16777215,
+      16777217,
+      18632469,
+      16837185,
+      16869685,
+      33554435,
+      9007199254740993
+    ],
+    "counter_denominator_float_boundary_unchanged": true,
+    "default_exact_counts": false,
+    "unsupported_TRL_source": "failbeforemutation when explicitflag enabled",
+    "evidence_hashes": {
+      "promotion_trainer_cpu_gate.json": "a3d6d5a52cc53af0eb4fd41e07ce7c0c1427a4e9c72a8322eeb45d2b01ae5cd4",
+      "promotion_trainer_nccl_gate.json": "3b5290e756477c4c061dfc4ddecc9b3ccca4fe9167ff123d1316470d1de2b8ab",
+      "promotion_trainer_source_manifest.json": "b66f61175c0bacb86208b5c2f6fc8ca940c3a4979e565aca25012b6170908163"
+    },
+    "post_gate_source_change": "exact_counts.py trailing blankline removed; identical AST to gated source"
   }
 }
