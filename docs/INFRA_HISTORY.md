@@ -2,61 +2,89 @@
 
 Qwen3.5-0.8B；主参数和优化器为 FP32，训练计算精度见表（v3.2的logprob反向另用TF32）。Rollout 默认BF16；FP8行的trainer／rollout均用原生FP8 GEMM，敏感算子保留BF16／FP32。总吞吐只统计实际参加训练的 completion token。
 
-| 阶段 | 训练计算 | 训练＋rollout H200 | 计时点 n | 中位秒/步 | 总 token/s | 等 rollout | MFU估算¹ | 首步训推差² |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| v0 | FP32 | 4＋4 | 9 | 120.17 | 1,607 | 54.7% | 12.1% | 2.04 |
-| v1（近似 TRL baseline） | BF16 | 4＋4 | 17 | 113.80 | 1,972 | 84.9% | 1.1% | 1.20 |
-| v2 | BF16 | 4＋2 | 4 | 136.38 | 1,551 | 90.9% | 0.9% | 1.17 |
-| v3 | BF16 | 4＋5 | 186 | 61.06 | 31,392 | 1.9% | 15.6% | 1.64 |
-| v3.1 | BF16 | 4＋3 | 25 | 63.87 | 30,755 | 2.0% | 15.0% | 1.52 |
-| v3.1b | BF16 | 4＋5 | 61 | 65.11 | 30,516 | 2.4% | 14.8% | 1.48 |
-| v3.1e | BF16 | 4＋5 | 110 | 65.27 | 30,957 | 1.9% | 15.0% | 1.54 |
-| v3.2 | BF16 | 4＋5 | 447 | 36.18 | 53,221 | 7.4% | 25.9% | 1.54 |
-| v3.2b | BF16 | 4＋5 | 447 | 36.15 | 52,825 | 7.8% | 25.7% | 1.46 |
-| v3.2（4＋4对照） | BF16 | 4＋4 | 17 | 35.57 | 53,691 | 6.4% | 26.7% | 1.49 |
-| v3.2（本轮对照） | BF16 | 4＋4 | 17 | 37.24 | 52,058 | 6.5% | 24.8% | 1.55 |
-| Native FP8（量化／缓存修复） | FP8 | 4＋4 | 17 | 38.33 | 52,992 | 8.2% | — | 14.42 |
-| Native FP8（compact backward＋128 GiB） | FP8 | 4＋4 | 17 | 32.34 | 58,363 | 5.8% | — | 14.42 |
-| Native FP8（view-base修复）³ | FP8 | 4＋4 | 17 | 33.82 | 57,103 | 5.2% | — | 14.33 |
-| Native FP8（stride统一） | FP8 | 4＋4 | 17 | 32.23 | 61,268 | 4.1% | — | 14.00 |
-| Native FP8（融合／缓存／MB1024）⁴ | FP8 | 4＋4＋2 reference | 3 | 71.67 | 135,439 | 8.6% | — | 待验证 |
-| **Native FP8（同源码复现，step 4–6）⁴** | FP8 | **4＋4＋2 reference** | **3** | **64.76** | **136,825** | **9.0%** | — | 待验证 |
-| Native FP8（同次复现，step 7–10）⁴ | FP8 | 4＋4＋2 reference | 4 | 69.18 | 108,421 | 23.8% | — | 待验证 |
-| **Native FP8（judge 链路修复，step 4–6）⁴** | FP8 | **4＋4＋2 reference** | **3** | **67.86** | **137,792** | **8.6%** | — | 待验证 |
+| 阶段 | 训练计算 | 训练＋rollout H200 | 计时点 n | 中位秒/步 | 总 token/s | 相对 v1 | 等 rollout | MFU估算¹ | 首步训推差² |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| v0 | FP32 | 4＋4 | 9 | 120.17 | 1,607 | 0.81× | 54.7% | 12.1% | 2.04 |
+| v1（近似 TRL baseline） | BF16 | 4＋4 | 17 | 113.80 | 1,972 | 1.00× | 84.9% | 1.1% | 1.20 |
+| v2 | BF16 | 4＋2 | 4 | 136.38 | 1,551 | 0.79× | 90.9% | 0.9% | 1.17 |
+| v3 | BF16 | 4＋5 | 186 | 61.06 | 31,392 | 15.92× | 1.9% | 15.6% | 1.64 |
+| v3.1 | BF16 | 4＋3 | 25 | 63.87 | 30,755 | 15.60× | 2.0% | 15.0% | 1.52 |
+| v3.1b | BF16 | 4＋5 | 61 | 65.11 | 30,516 | 15.47× | 2.4% | 14.8% | 1.48 |
+| v3.1e | BF16 | 4＋5 | 110 | 65.27 | 30,957 | 15.70× | 1.9% | 15.0% | 1.54 |
+| v3.2 | BF16 | 4＋5 | 447 | 36.18 | 53,221 | 26.99× | 7.4% | 25.9% | 1.54 |
+| v3.2b | BF16 | 4＋5 | 447 | 36.15 | 52,825 | 26.79× | 7.8% | 25.7% | 1.46 |
+| v3.2（4＋4对照） | BF16 | 4＋4 | 17 | 35.57 | 53,691 | 27.23× | 6.4% | 26.7% | 1.49 |
+| v3.2（本轮对照） | BF16 | 4＋4 | 17 | 37.24 | 52,058 | 26.40× | 6.5% | 24.8% | 1.55 |
+| v4（量化／缓存修复） | FP8 | 4＋4 | 17 | 38.33 | 52,992 | 26.87× | 8.2% | 4.3% | 14.42 |
+| v4（compact backward＋128 GiB） | FP8 | 4＋4 | 17 | 32.34 | 58,363 | 29.60× | 5.8% | 4.7% | 14.42 |
+| v4（view-base修复）³ | FP8 | 4＋4 | 17 | 33.82 | 57,103 | 28.96× | 5.2% | 4.6% | 14.33 |
+| v4（stride统一） | FP8 | 4＋4 | 17 | 32.23 | 61,268 | 31.07× | 4.1% | 5.0% | 14.00 |
+| v4（融合／缓存／MB1024）⁴ | FP8 | 4＋4＋2 reference | 3 | 71.67 | 135,439 | 68.68× | 8.6% | 10.5% | 14.28 |
+| **v4（同源码复现，step 4–6）⁴** | FP8 | **4＋4＋2 reference** | **3** | **64.76** | **136,825** | 69.38× | **9.0%** | 10.6% | 14.50 |
+| v4（同次复现，step 7–10）⁴ | FP8 | 4＋4＋2 reference | 4 | 69.18 | 108,421 | 54.98× | 23.8% | 8.3% | 14.50 |
+| **v4（judge 链路修复，step 4–6）⁴** | FP8 | **4＋4＋2 reference** | **3** | **67.86** | **137,792** | 69.87× | **8.6%** | 10.8% | 14.46 |
+| v4（β=0，4＋4静态） | FP8 | 4＋4 | 3 | 63.33 | 116,249 | 58.95× | 32.8% | 9.0% | 14.34 |
+| v4（β=0，4＋4自适应） | FP8 | 4＋4 | 3 | 63.53 | 141,979 | 72.00× | 16.5% | 11.2% | 14.33 |
+| **v4（β=0，4＋6静态）** | FP8 | 4＋6 | 3 | 58.01 | 151,401 | 76.78× | 11.3% | 11.8% | 14.20 |
 
-本轮FP8与4＋4对照统计步骤4–20；历史长run统计step≥4。总吞吐＝Σ completion token / Σ step秒，等待和MFU按计时加权。v0、v1和4＋4对照使用同一checkpoint、KL reference、数据及公共超参数；v0是FP32训练基线，使用SDPA＋PyTorch fallback。历史各行的checkpoint、batch和judge配置不同；4＋5主线另有1张评测卡。
+### v4 setting
 
-¹ MFU仅包含4张训练卡，计入等待；BF16按989.5 TFLOP/s/卡、FP32按67 TFLOP/s/卡计算（[H200规格](https://www.nvidia.com/en-us/data-center/h200/)）。使用TRL通用FLOPs公式，未精确计入混合attention、共享前缀、reference与重计算，属于估算。不同精度的MFU百分比不能表示速度倍数。
+| 项目 | 设置 |
+|---|---|
+| baseline | 保留 GSPO 与原 reward／Luna judge；本轮去掉 KL reference，β=0；旧 v4 为 β=0.05 |
+| 卡数 | 4＋4 共 8 张；4＋6 共 10 张，额外 2 张为跨机 rollout 副本 |
+| batch | 每卡真实 microbatch 1024；GAS=1；global batch=4096；独立 G32；subbatch token=65536 |
+| 精度 | FP32 主参数、梯度与 Adam；trainer／rollout 均用 FP8 GEMM；attention KV 为 BF16、GDN state 为 FP32 |
+| 输入 | v3.1e ckpt100；rl_pool_b_v0_think；aiq_think_reward_v3；LR=2e-6，warmup=5，seed=0 |
+| clip | 实际训练 low/high=0.004/0.004；同 batch 诊断 0.004/0.008、0.008/0.004、0.016/0.004 |
+| 等待调节 | 按 optimizer step 的等待、队列、staleness/drop 调整入场数，完成已入场的完整 G32；4＋6 本次使用静态设置 |
 
-² 首步训推差＝LR为0时，序列平均log-ratio绝对值的p90，单位为0.001；各组实际采样batch不同。
-FP8完整混合精度MFU暂无，不能套用BF16峰值。本轮数据与源码哈希见[FP8证据](reports/FP8_SCALE_2026-10-05.json)；单卡固定G32仅投影＋head的GEMM估算：BF16／TF32 11.60%，修复后的FP8 5.08%，compact128 5.83%；计时包含BF16 reference，范围不同，不进入此表。
-最新固定G32中，原生FP8投影＋head实测约1,282 TFLOP/s，为H200稠密FP8峰值的64.8%；这是GEMM内核利用率，包含checkpoint重算，不是整模型MFU。
+4＋4＋2 reference 中的 2 张卡运行冻结 BF16 reference，为 β=0.05 的 KL 项提供 logprob；不负责 reward 或 policy 更新。β=0 后，这两张卡可改为 rollout，构成 4＋6。
 
-³ 该轮judge上游失败占54.5%，源码与设置对齐，但实际奖励服务状态不同；速度仅作为系统观测。
+总吞吐＝Σ 实际参加训练的 completion token／Σ step 秒，包含等待和权重同步。旧 20 步对照统计 step 4–20，历史长 run 统计 step≥4；新配方主窗口预先固定 step 4–6，10 步复现另列 step 7–10。本轮三个 β=0 run 均完成 6 步、exit=0，输入哈希相同；实际异步采样 batch 不同，每配置只跑了一次，未验证长期训练收益。
 
-⁴ 新配方真实microbatch为每rank 1024、GAS=1、global batch=4096，保留独立G32；旧4＋4对照global batch=1024。另用2张独立H200计算完整固定BF16 reference，共10张卡。三次run的主窗口预先固定step 4–6，10步复现另固定step 7–10；训推逐token一致性未通过；原10步复现及时judge verdict为3/228（1.3%），修复连接回退与取消后为151/154（98.1%），模型、prompt、RPM与90秒预算保持原设置。短窗口吞吐不能代表相同有效reward或学习质量。实验代码见[冻结源码包](reports/FP8_SPRINT_2026-10-06_sources.tar.gz)，运行基座为公开提交`2d9295e`；需要原checkpoint、数据、reward和对应运行环境，仓库主入口尚未集成全部实验配方。
+v0、v1 与旧 4＋4 BF16 对照使用同 checkpoint、KL reference、数据和公共超参数；历史主线各阶段的 checkpoint、batch 与 judge 设置不同，4＋5 主线另有 1 张评测卡。表中倍数表示各阶段的总吞吐。
 
-改动简述：
+¹ MFU 只统计 4 张训练卡并计入等待。v0–v3.2 使用 TRL 通用 FLOPs 公式，FP32／BF16 峰值取 67／989.5 TFLOP/s。v4 使用捕获的投影／head、attention／GDN 有用 FLOPs，按共享前缀 token 代理缩放；公式为 Σ(FLOPs精度／峰值精度)÷(4×总秒)，FP8／BF16 峰值取 1,979／989 TFLOP/s（[H200 规格](https://www.nvidia.com/en-us/data-center/h200/)）。不计 rollout／reference、padding 和重算，attention 长度与 head 占比也只是近似；**两种估算法不能用来判断跨精度 MFU 退化**。本轮 4＋4 静态／自适应／4＋6 的纯前反向阶段估算为 **14.4%／14.4%／14.3%**，整模型 MFU 尚非实测。
 
-- **v0→v1**：主参数和优化器保持FP32，训练计算改为BF16 autocast。
-- **v2**：ranking reward从线性分数改为逆序数奖励，trainer主体相同。
-- **v3**：TP rollout改为TP1多副本DP；每步固定1024样本，stale从1改为3，共享prompt前缀，暂关judge，并修复API server与连接超时。
-- **v3.1系列**：恢复并发judge，增加judged staleness补偿与丢弃审计；调整队列和跨机卡数，v3.1e固定KL reference。
-- **v3.2**：fast logprob、按token切子批、自适应activation checkpoint、rank负载均衡；v3.2b沿用同一infra继续训练。
-- **Native FP8**：前反向GEMM使用FP8，更新与累加保持FP32；修复变长量化重复编译、fused AdamW缓存不刷新、vLLM AOT缓存dtype错配。
-- **FP8早期优化**：Norm反向保存输入并重算中间值，减少activation checkpoint；统一backward布局，总吞吐提高14.1%。
-- **FP8新配方**：融合conv＋SiLU、仅打包小维度Norm反向；减少native scheduler／KV bookkeeping和输出处理；缓存sampled-token文本并使用FlatLogprobs；提前在独立卡计算完整BF16 reference；真实microbatch增大到1024，使用整数token计数和丢弃审计。保持FP32主参数、梯度和Adam，以及BF16 attention KV。
-- **Judge链路**：修复首个地址连接卡住时的取消与回退，每地址TCP／TLS预算3秒，保持整体89秒deadline；复用健康连接，及时判分恢复至98.1%。
-- **未采用的修改**：FP8 attention KV完整cohort慢11.9%；两个独立G32合并投影＋MLP虽logprob逐值一致，却慢9.7%、显存113.8 GiB；MB2048也因rollout等待未达到2×。GDN与其他训推对齐候选的整模型gate仍未通过，本轮保留实验源码与证据。
+² 首步训推差＝LR 为 0 时，序列平均 log-ratio 绝对值的 p90，表内单位为 0.001；各组实际采样 batch 不同。与下面的逐 token 一致性测试口径不同。
 
-可选原生logprob缓存已集成为`RLFORGE_SERVING_LOGPROBS_CACHE=1`（默认关闭，安装包后由vLLM general plugin加载）；58,262位置的原生字段、UTF-8及累计logprob逐值一致，main／spawn均通过。开启时需使用记录的vLLM源码版本；stream／top-K／echo等请求回到原生路径。
+³ view-base 轮的 judge 上游失败占 54.5%，仅作为系统速度观测。⁴ 新配方每卡 MB1024、GAS1、global4096；旧 4＋4 对照 global1024。旧 10 步复现及时 judge 为 3/228；修复链路后为 151/154。本轮三个 β=0 run 为 160/163、137/140、120/120，均保留原 reward 与 judge；这些计数覆盖整个 run 的已评分记录，也包括后来丢弃的样本。
 
-主入口支持`--num-generations 32 --completions-per-step 1024 --microbatch-per-rank 1024 --exact-token-counts`，即每卡真实microbatch 1024、GAS=1。指标通信由8–9次合成1次；四卡NCCL的64组对照最大差1.2×10⁻¹⁰，G32分组和样本字段保持一致。整数计数仅在显式开启时应用，要求记录的TRL源码版本；其余FP8实验配方仍见源码包。
+本轮 4＋4 静态／自适应／4＋6 吞吐为最强 BF16 的 **2.17×／2.64×／2.82×**，包含精度、真实 microbatch、调度与 β 的改变。自适应 4＋4 的 inventory 在 step 4、5 后从 352→308→269，等待由 32.8% 降至 16.5%。4＋6 等待进一步降至 11.3%，总吞吐比自适应 4＋4 高 6.6%；按全部物理卡归一，自适应 4＋4 为 17,747 token/s/卡，4＋6 为 15,140 token/s/卡。
 
-同八卡对齐实测，v3.2总吞吐是v1的**27.2倍**；同4＋5卡历史记录，v3.1e→v3.2提高**1.72倍**。
+### 训推差异
 
-可选decode调度与输出处理已集成为`RLFORGE_SERVING_DECODE=1`（默认关闭），保留原生边界fallback与依赖源码检查。11,776步原生状态对照、13种混合场景和main／spawn均通过；整理后的单卡完整生成比冻结实验链慢1.9%，尚未证明完整RL无回归，不替换上表实验配方。
+同 checkpoint、同 token、零参数更新，两端均为原生 FP8；1 个实际样本、128 个 completion token：
 
-本轮收束新增可选`RLFORGE_FP8_FORWARD=torch`（两端进程都需设置，默认`native`）：trainer与自身serving投影／head共用Torch原生FP8 GEMM，修复16-byte scale指针对齐，FP8输入和BF16输出保持不变；H200测试32 passed。同一单卡fixture、15层checkpoint、完整本地BF16 reference下，BF16／原生FP8／共享Torch FP8为2,908／1,760／1,794 ms，峰值显存86.59／53.23／53.23 GiB；共享前向额外耗时1.89%。fixture重放历史completion到共同prompt，原始配对不可得，仅代表计算对照。FP32 Adam另一次CUDA实测6.41 ms，约占该固定G32 policy compute的0.53%。
+| logprob 差 | 有符号均值 | 逐 token 绝对差 P90 |
+|---|---:|---:|
+| trainer−decode | −0.00434 | 0.1214 |
+| trainer−prefill | −0.00219 | 0.1254 |
+| prefill−decode | −0.00215 | 0.1431 |
 
-已用实际输入定位residual舍入、SwiGLU、主／gated RMSNorm和FA3 split规则差异；算子gate通过，整模型训推仍未通过。固定split候选的128 token logprob差p90：trainer–decode 0.1154、trainer–prefill 0.0863、prefill–decode 0.0835，门槛0.004；它尚未与最新pointwise候选完整组合。融合候选修复QK布局后，同一训练计算路径的整模型前向logprob逐值一致，计算快3.65%、显存75.76→61.27 GiB；梯度误差与原实现重复运行接近，但严格梯度gate失败，未集成。近似混合精度useful peak-equivalent为17.27%（单卡含本地reference），整模型／完整RL MFU仍未实测；不替换表中的MFU。详细数值、gate和源码哈希见[FP8证据](reports/FP8_SCALE_2026-10-05.json)。
+**P90 门槛 0.004，三项均未通过。** 无 optimizer update、主权重与 serving 权重未变；诊断 serving 的 batch／prefix cache 配置与生产不同，尚不能代表全 batch 一致性。性能提升已测到，训推一致仍需修复。
+
+### GSPO clip
+
+4＋6 的 step 4–6，共 12,288 条 sequence；同一批实际 ratio 与 advantage 的阈值诊断，实际训练仍为第一行设置：
+
+| ε low／high | 下侧越界 | 上侧越界 | 实际下侧 clip（负 advantage） | 实际上侧 clip（正 advantage） |
+|---|---:|---:|---:|---:|
+| **0.004／0.004** | 95.57% | 0.0814% | **43.84%** | 0.0081% |
+| 0.004／0.008 | 95.57% | 0% | 43.84% | 0% |
+| 0.008／0.004 | 75.62% | 0.0814% | 35.61% | 0.0081% |
+| 0.016／0.004 | 5.84% | 0.0814% | 2.56% | 0.0081% |
+
+分母均为全部 sequence；实际 clip 指 surrogate 对 ratio 的平坦分支，不是梯度范数裁剪。放宽 high 几乎没有作用，放宽 low 可减少平坦分支；这不能证明训练质量改善，也不能修复当前训推数值偏差与 policy age。日志的 token clip 约 17.1%／9.3%，与上表的 GSPO sequence clip 不同。
+
+### 改动简述
+
+- **v0→v1**：主参数和优化器保持 FP32，训练计算改为 BF16 autocast；v0 使用 SDPA＋PyTorch fallback。
+- **v2→v3**：调整 ranking reward；TP rollout 改为 TP1 多副本 DP，共享 prompt 前缀，修复 API 连接超时，调整 stale 和队列。
+- **v3.1 系列**：恢复并发 judge，增加 judged staleness 补偿、丢弃审计和固定 KL reference；**v3.2** 加入 fast logprob、token 子批、自适应 activation checkpoint、rank 负载均衡。
+- **v4**：前反向 GEMM 使用 FP8、更新与累加保持 FP32；修复量化重复编译、Adam 更新后量化缓存不刷新、vLLM 缓存 dtype 和 backward stride。融合 conv＋SiLU，减少 Norm 保存的中间量和 scheduler／输出处理，增大真实 microbatch。
+- **本轮 β=0**：去掉 KL reference，保留原 reward／judge；测试 4＋6 与逐步 admission 控制，补齐 MFU 估算、零更新训推差异、GSPO 两侧 clip 诊断。
+- **保留的限制**：FP8 KV、MB2048、合并独立 G32 的候选未带来预期收益；共同算子与融合梯度候选的整模型 gate 尚未通过。主入口只集成了部分可选优化，本表高吞吐来自冻结实验配方。
+
+数值、窗口、输入／源码哈希：[本轮 β=0 证据](reports/V4_BASELINE_2026-10-06.json)、[历史 FP8 证据](reports/FP8_SCALE_2026-10-05.json)。复核源码：[本轮脚本与数值](reports/V4_BASELINE_2026-10-06_sources.tar.gz)、[冻结实验基座](reports/FP8_SPRINT_2026-10-06_sources.tar.gz)；需要原 checkpoint、数据、reward 与记录的运行环境。
