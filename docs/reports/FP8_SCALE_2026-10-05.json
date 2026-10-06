@@ -4783,6 +4783,336 @@
       "boundary": "Exact code promoted from tested staging. Native fallback differs from archived speed recipe; no totalRL nonregression or speedup claim.",
       "formal_pytest": "Remote pytest unavailable, local vLLM unavailable; direct installed-native gates passed",
       "handoff_sha256": "f3a3f803b9ff1ed9c5da67f7925e5d13c9fb1e57ceb55364e8fec319bb0dcbed"
+    },
+    "wrapup_2026_10_06": {
+      "shared_forward": {
+        "enabled_by": "RLFORGE_FP8_FORWARD=torch",
+        "default": "native",
+        "both_policy_processes_required": true,
+        "scale_pointer_alignment_bytes": 16,
+        "serving_scope": "Only owned poor_rl projection kernel instances and head; global CUTLASS class unchanged",
+        "FP8_input_BF16_output": true,
+        "tests": {
+          "exit_code": 0,
+          "started_utc": "2026-10-06T08:29:02.734448+00:00",
+          "ended_utc": "2026-10-06T08:29:15.191166+00:00",
+          "source_sha256": {
+            "code/rlforge/fp8.py": "ae0a9ffd802458d536c1c10547b464caa922b86f5b723b2ef8c84c5679a24add",
+            "code/rlforge/fp8_serving.py": "5bcd2bd1aff5c6f1296966270166a144df1f9fe9f38946355f6ccf6c127011e4",
+            "test_fp8.py": "32008570bdc62c0121c5638cbb6ad097fd606d20bc86b7d89ea8132cade94bd1",
+            "test_fp8_serving.py": "710e5c6d5de0280aee70539dfe5e31e139bd3c79b3995a59ac22f641359e300a"
+          },
+          "log": "................................                                         [100%]\n=============================== warnings summary ===============================\n../../../../../../usr/local/lib/python3.10/dist-packages/torch/jit/_script.py:365: 14 warnings\n  /usr/local/lib/python3.10/dist-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.\n    warnings.warn(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n32 passed, 14 warnings in 10.35s\n"
+        },
+        "matched_compute": [
+          {
+            "arm": "bf16",
+            "scope": "One H200; real fixed-token GSPO forward/backward including frozen reference, no DDP/rollout/judge; not total RL.",
+            "median_compute_ms": 2908.328125,
+            "completion_tokens": 58248,
+            "completion_token_s": 20028.001482810676,
+            "G": 32,
+            "GAS": 1,
+            "peak_allocated_gib": 86.58976650238037,
+            "master_gradient_moments_fp32": true,
+            "tokens_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+            "source_sha256": {
+              "fp8.py": "ae0a9ffd802458d536c1c10547b464caa922b86f5b723b2ef8c84c5679a24add",
+              "fp8_alignment.py": "736108537b40ebb3ebbea16d9195a7078f23d92cd01237ce42d01a28b32e5d75",
+              "trainer.py": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb",
+              "prefix_share.py": "b4df9db9d6961ecf8d112bf61ed1e2a7752889a3ea7d78199c21e9cdba84c92c",
+              "fast_logprob.py": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f",
+              "fused_ops.py": "d433c924354a45046b1163e4a6e1878166e9bce9c6a2a970243c1c36bba0c324"
+            },
+            "subbatch_plan": [
+              {
+                "padded_tokens": 65053,
+                "checkpoint_layers": [
+                  0,
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  13,
+                  14
+                ]
+              }
+            ]
+          },
+          {
+            "arm": "fp8_fusion",
+            "scope": "One H200; real fixed-token GSPO forward/backward including frozen reference, no DDP/rollout/judge; not total RL.",
+            "median_compute_ms": 1760.3338623046875,
+            "completion_tokens": 58248,
+            "completion_token_s": 33089.17771072118,
+            "G": 32,
+            "GAS": 1,
+            "peak_allocated_gib": 53.231204986572266,
+            "master_gradient_moments_fp32": true,
+            "tokens_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+            "source_sha256": {
+              "fp8.py": "ae0a9ffd802458d536c1c10547b464caa922b86f5b723b2ef8c84c5679a24add",
+              "fp8_alignment.py": "736108537b40ebb3ebbea16d9195a7078f23d92cd01237ce42d01a28b32e5d75",
+              "trainer.py": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb",
+              "prefix_share.py": "b4df9db9d6961ecf8d112bf61ed1e2a7752889a3ea7d78199c21e9cdba84c92c",
+              "fast_logprob.py": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f",
+              "fused_ops.py": "d433c924354a45046b1163e4a6e1878166e9bce9c6a2a970243c1c36bba0c324"
+            },
+            "subbatch_plan": [
+              {
+                "padded_tokens": 65053,
+                "checkpoint_layers": [
+                  0,
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  13,
+                  14
+                ]
+              }
+            ]
+          },
+          {
+            "arm": "fp8_fusion",
+            "scope": "One H200; real fixed-token GSPO forward/backward including frozen reference, no DDP/rollout/judge; not total RL.",
+            "median_compute_ms": 1793.6658935546875,
+            "completion_tokens": 58248,
+            "completion_token_s": 32474.275286889748,
+            "G": 32,
+            "GAS": 1,
+            "peak_allocated_gib": 53.231204986572266,
+            "master_gradient_moments_fp32": true,
+            "tokens_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+            "source_sha256": {
+              "fp8.py": "ae0a9ffd802458d536c1c10547b464caa922b86f5b723b2ef8c84c5679a24add",
+              "fp8_alignment.py": "736108537b40ebb3ebbea16d9195a7078f23d92cd01237ce42d01a28b32e5d75",
+              "trainer.py": "106e2531f4d47bae9f75347b03cd50a6547d7aad9426a4a9a00d4a966eb6badb",
+              "prefix_share.py": "b4df9db9d6961ecf8d112bf61ed1e2a7752889a3ea7d78199c21e9cdba84c92c",
+              "fast_logprob.py": "df78ee9c79d0107657f8912c6c71cf22be57ec9a4b38c238a94b5e7155b3623f",
+              "fused_ops.py": "d433c924354a45046b1163e4a6e1878166e9bce9c6a2a970243c1c36bba0c324"
+            },
+            "subbatch_plan": [
+              {
+                "padded_tokens": 65053,
+                "checkpoint_layers": [
+                  0,
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8,
+                  9,
+                  10,
+                  11,
+                  12,
+                  13,
+                  14
+                ]
+              }
+            ]
+          }
+        ],
+        "fixture_boundary": "Fixed compute fixture replays historical completions on a common prompt; original prompt/completion pairing is unavailable. Not complete RL.",
+        "shared_compute_overhead_pct": 1.8935,
+        "whole_model_consistency_proven": false
+      },
+      "alignment_candidates": [
+        {
+          "artifact": "gdn_full_pointwise_policy_serving_case0_v3.json",
+          "source_sha256": "50123f9fad7457bd840f9e35f459497f60509de362b781c6f47102b3e7ce97cc",
+          "threshold": 0.004,
+          "suite_complete": false,
+          "all_mean_gates_pass": false,
+          "all_p90_gates_pass": false,
+          "cases": [
+            {
+              "case": 0,
+              "max_tokens": 128,
+              "differences": {
+                "trainer_minus_decode": {
+                  "mean": -0.002123024782932248,
+                  "mean_abs": 0.035182545860880765,
+                  "p90_abs": 0.12895262241363525,
+                  "max_abs": 0.28387776017189026,
+                  "first": 7.492024451494217e-06
+                },
+                "trainer_minus_prefill": {
+                  "mean": -0.004453653906510979,
+                  "mean_abs": 0.03306078612691543,
+                  "p90_abs": 0.10999542474746704,
+                  "max_abs": 0.45720815658569336,
+                  "first": 7.492024451494217e-06
+                },
+                "prefill_minus_decode": {
+                  "mean": 0.0023306291235787313,
+                  "mean_abs": 0.0284936821377606,
+                  "p90_abs": 0.11015346646308899,
+                  "max_abs": 0.25736570358276367,
+                  "first": 0.0
+                }
+              },
+              "passes_mean_ratio_gate": false,
+              "passes_token_p90_gate": false
+            }
+          ]
+        },
+        {
+          "artifact": "attention_shared_split_serving_case0_v1.json",
+          "source_sha256": "50123f9fad7457bd840f9e35f459497f60509de362b781c6f47102b3e7ce97cc",
+          "threshold": 0.004,
+          "suite_complete": false,
+          "all_mean_gates_pass": false,
+          "all_p90_gates_pass": false,
+          "cases": [
+            {
+              "case": 0,
+              "max_tokens": 128,
+              "differences": {
+                "trainer_minus_decode": {
+                  "mean": 0.005960481886752689,
+                  "mean_abs": 0.03685259158958942,
+                  "p90_abs": 0.11537209153175354,
+                  "max_abs": 0.4070308208465576,
+                  "first": -2.9458955395966768e-05
+                },
+                "trainer_minus_prefill": {
+                  "mean": 0.010143281895588885,
+                  "mean_abs": 0.030408886710100447,
+                  "p90_abs": 0.08630385994911194,
+                  "max_abs": 0.3749064803123474,
+                  "first": -2.9458955395966768e-05
+                },
+                "prefill_minus_decode": {
+                  "mean": -0.004182800008836196,
+                  "mean_abs": 0.03047542551460758,
+                  "p90_abs": 0.08348256349563599,
+                  "max_abs": 0.42499464750289917,
+                  "first": 0.0
+                }
+              },
+              "passes_mean_ratio_gate": false,
+              "passes_token_p90_gate": false
+            }
+          ]
+        }
+      ],
+      "training_fusion_candidate": {
+        "scope": "One H200 full-model paired fixed G32; local BF16 frozen reference; no rollout/judge/DDP and no full winner recipe claim",
+        "source_sha256": {
+          "fp8_alignment.py": "213411482c39208a4bbf3708e8ec1bc2a35d90295771083ec65b584aeb2f2f41",
+          "fp8_fusion.py": "c8c6ac92a737fa7041f87b69087dcf90bdfac89db29a3ced442288938ad8fd8b"
+        },
+        "script_sha256": "bcdf18d76a1d10dd88d94bc289206c64e5ac55e44b96dbd12fec2b9e6890beb1",
+        "tokens_sha256": "23f0f6bbd0e3a1c395daddf7c011712f25ab99cd92922fe79ace55b9d66b5989",
+        "completion_tokens": 58248,
+        "paired_compute_speedup": 1.0364908104810704,
+        "strict_gradient_gate_passed": false,
+        "gradient_within_baseline_repeat_noise": true,
+        "numerical_gate_passed": true,
+        "baseline_repeat_gradient": {
+          "global_relative_l2": 0.1315805939737128,
+          "global_cosine": 0.9913347702828753,
+          "norm_ratio": 0.9989557598693481
+        },
+        "arms": [
+          {
+            "arm": "canonical",
+            "loss": 0.29771000146865845,
+            "loss_abs_delta": 0.0,
+            "completion_logprob_exact": true,
+            "completion_logprob_max_abs": 0.0,
+            "completion_logprob_mean_abs": 0.0,
+            "finite_fp32_gradients": true,
+            "median_cuda_ms": 2487.27099609375,
+            "peak_allocated_gib": 75.75897550582886
+          },
+          {
+            "arm": "public_subset",
+            "loss": 0.29771000146865845,
+            "loss_abs_delta": 0.0,
+            "completion_logprob_exact": true,
+            "completion_logprob_max_abs": 0.0,
+            "completion_logprob_mean_abs": 0.0,
+            "finite_fp32_gradients": true,
+            "median_cuda_ms": 2399.703857421875,
+            "peak_allocated_gib": 61.273693561553955,
+            "gradient_global_relative_l2": 0.13285490685553816,
+            "gradient_global_cosine": 0.9911837860720709,
+            "selected_master_update_max_abs": 1.4901161193847656e-06,
+            "optimizer_states_fp32": true
+          }
+        ],
+        "canonical_integration": false,
+        "boundary": "Exact forward versus original trainer on one fixed batch; aggregate gradients within baseline repeat variability, strict gradient threshold failed. No trainer-serving consistency or complete RL gain claimed."
+      },
+      "mfu_ledger": {
+        "scope": "oneH200 fixedG32 current nativeFP8 policy with local fullBF16 frozen reference, noDDP/rollout/judge",
+        "token_contract": {
+          "completion": 58248,
+          "logical_shared_prefix_plus_branches": 62824,
+          "padded_shared_prefix_plus_branches": 65053,
+          "bucket_padding_pct": 3.5480071310327155,
+          "prefix_shared": 2560,
+          "branch_prompt_tail": 63,
+          "group_size": 32
+        },
+        "exact_fp8_gemm_crosscheck": true,
+        "exact_executed_fp8_flops": 315130597343232,
+        "useful_unpadded_fp8_training_matmul_flops": 276041130049536,
+        "execution_overhead": {
+          "excluded_from_useful": [
+            "rightpadding",
+            "tensorcore16alignment",
+            "headlogitsreplay",
+            "wholelayercheckpointreplay",
+            "GDNinternalWY/state replay"
+          ],
+          "fp8_executed_minus_useful_flops": 39089467293696,
+          "FP8_execution_minus_useful_pct": 14.16074020805571
+        },
+        "achieved_native_fp8_gemm": {
+          "tflop_s": 1282.412905803458,
+          "dense_peak_pct": 64.80105638218586,
+          "definition": "executed2MNK/nativeFP8kernelms only; not fullMFU"
+        },
+        "mixed_peak_equivalent_useful_math": {
+          "policy_ideal_s": 0.17713437641135876,
+          "local_reference_ideal_s": 0.10564657002903943,
+          "policy_only_over_full_probe_wall_pct": 10.820869019073973,
+          "policy_plus_reference_over_full_probe_wall_pct": 17.274656927208976,
+          "definition": "sum(FLOPs_dtype / dense_peak_dtype) / actual unprofiled complete localprobe compute wall; approximate useful contraction numerator",
+          "is_measured_whole_model_MFU": false
+        },
+        "whole_model_MFU": null,
+        "production_E2E_MFU": null
+      },
+      "evidence_sha256": {
+        "shared_forward_final_gpu.json": "14aa040fabc893e89c650f818ccd599742a314734256dea8e725df6227ea5a41",
+        "whole_model_mfu_shape_audit.json": "bda53aea26f0530b2417762e8d3072bf1f331d3672f41e00afb4a405e9e349a9",
+        "strongest_recipe_reproduction_audit.json": "7865c07c8c7968603724bbde777bedb9e4934d652529f25c6f02cdb329e5f922",
+        "wrapup_final_small_evidence.tar.gz": "72a2fa5e6dc617aa77564ded103cfbdb5a832bd23539e41807bc8f6c16b68ba6"
+      },
+      "boundary": "No new complete RL run during wrap-up. All throughput windows retain their published hardware/batch/judge and numerical boundaries."
     }
   },
   "canonical_microbatch_metrics_integration": {

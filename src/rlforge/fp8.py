@@ -241,12 +241,20 @@ def scaled_mm(a, b, scale_a, scale_b, *, out_dtype=torch.bfloat16):
     if a.shape[1] % 16 or b.shape[0] % 16:
         raise ValueError("Native FP8 GEMM requires K and N divisible by 16")
     sb = scale_b.t().contiguous() if scale_b.ndim == 2 else scale_b
+    # Torch's rowwise GEMM requires aligned scale pointers, including M=1 views.
+    sa = scale_a.clone() if scale_a.data_ptr() % 16 else scale_a
+    sb = sb.clone() if sb.data_ptr() % 16 else sb
     with torch.autocast("cuda", enabled=False):
-        return torch._scaled_mm(a, b.t(), scale_a=scale_a, scale_b=sb,
+        return torch._scaled_mm(a, b.t(), scale_a=sa, scale_b=sb,
                                 out_dtype=out_dtype, use_fast_accum=False)
 
 
 def forward_mm(a, b, scale_a, scale_b):
+    backend = os.environ.get("RLFORGE_FP8_FORWARD", "native")
+    if backend == "torch":
+        return scaled_mm(a, b, scale_a, scale_b)
+    if backend != "native":
+        raise ValueError("RLFORGE_FP8_FORWARD must be native or torch")
     from vllm import _custom_ops as ops
     return ops.cutlass_scaled_mm(a, b.t(), out_dtype=torch.bfloat16,
                                  scale_a=scale_a, scale_b=scale_b.t(), bias=None)

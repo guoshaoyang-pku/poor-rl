@@ -54,6 +54,7 @@ def test_fp32_master_quantization_avoids_bf16_intermediate():
 
 
 def test_reload_metadata_loads_fp32_and_output_stays_bf16(monkeypatch):
+    monkeypatch.setenv("RLFORGE_FP8_FORWARD", "native")
     received = {}
 
     def create_weights(self, layer, input_partition, output_partitions,
@@ -99,6 +100,43 @@ def test_activation_contract_is_bf16(monkeypatch):
     method = object.__new__(fp8_serving.MasterFP8LinearMethod)
     with pytest.raises(ValueError, match="dtype bfloat16"):
         method.create_weights(torch.nn.Module(), 64, [32], 64, 32, torch.float16)
+
+
+def test_shared_forward_is_scoped_to_owned_projection_kernel(monkeypatch):
+    from rlforge import fp8
+
+    monkeypatch.setenv("RLFORGE_FP8_FORWARD", "torch")
+    monkeypatch.setattr(fp8_serving, "get_tensor_model_parallel_world_size", lambda: 1)
+    monkeypatch.setattr(OnlineLinearBase, "create_weights",
+        lambda self, layer, *args, **kwargs: setattr(layer, "weight",
+            torch.nn.Parameter(torch.empty(32, 64, dtype=torch.float32))))
+    kernel = SimpleNamespace(logical_output_size=32)
+    monkeypatch.setattr("vllm.model_executor.layers.quantization.online.fp8.init_fp8_linear_kernel",
+                        lambda **kwargs: SimpleNamespace())
+    monkeypatch.setattr(fp8_serving, "init_fp8_linear_kernel", lambda **kwargs: kernel)
+    original = fp8_serving.CutlassFP8ScaledMMLinearKernel.apply_scaled_mm
+    method = object.__new__(fp8_serving.MasterFP8LinearMethod)
+    method.input_dtype = method.out_dtype = torch.bfloat16
+    method.create_weights(torch.nn.Module(), 64, [32], 64, 32, torch.bfloat16)
+    a = torch.zeros(7, 64, dtype=torch.float8_e4m3fn)
+    weight = torch.zeros(32, 64, dtype=a.dtype)
+    sa, sb = torch.ones(7, 1), torch.ones(1, 32)
+    result = torch.randn(7, 32, dtype=torch.bfloat16)
+
+    def forward(actual_a, actual_b, actual_sa, actual_sb):
+        assert actual_a is a and actual_b.data_ptr() == weight.data_ptr()
+        assert actual_b.stride() == weight.stride()
+        assert actual_sa is sa and torch.equal(actual_sb, sb.t())
+        return result
+
+    monkeypatch.setattr(fp8, "forward_mm", forward)
+    actual = kernel.apply_scaled_mm(A=a, B=weight.t(), As=sa, Bs=sb,
+        out_dtype=torch.bfloat16, bias=None, output_shape=(1, 7, 32))
+    assert torch.equal(actual, result.reshape(1, 7, 32))
+    assert fp8_serving.CutlassFP8ScaledMMLinearKernel.apply_scaled_mm is original
+    with pytest.raises(ValueError, match="without bias"):
+        kernel.apply_scaled_mm(A=a, B=weight.t(), As=sa, Bs=sb,
+            out_dtype=torch.bfloat16, bias=torch.zeros(32), output_shape=(7, 32))
 
 
 def test_sensitive_projections_stay_unquantized_and_vocab_head_uses_master_method(monkeypatch):

@@ -17,6 +17,39 @@ def test_row_quantization_does_not_depend_on_batch():
     assert not zeros.float().any()
 
 
+@pytest.mark.parametrize("offset", [0, 1, 2, 3])
+def test_shared_forward_aligns_scale_views_without_changing_values(monkeypatch, offset):
+    monkeypatch.setenv("RLFORGE_FP8_FORWARD", "torch")
+    a = torch.zeros(1, 16, dtype=torch.float8_e4m3fn)
+    b = torch.zeros(32, 16, dtype=a.dtype)
+    activation_storage = torch.arange(8, dtype=torch.float32).reshape(-1, 1)
+    weight_storage = torch.arange(40, dtype=torch.float32).reshape(-1, 1)
+    sa = activation_storage[offset:offset + 1]
+    sb = weight_storage[offset:offset + 32]
+    output = torch.zeros(1, 32, dtype=torch.bfloat16)
+
+    def scaled_mm(actual_a, actual_b, *, scale_a, scale_b, out_dtype, use_fast_accum):
+        assert actual_a is a and actual_b.data_ptr() == b.data_ptr()
+        assert actual_b.stride() == (1, 16)
+        assert scale_a.data_ptr() % 16 == scale_b.data_ptr() % 16 == 0
+        assert torch.equal(scale_a, sa) and torch.equal(scale_b, sb.t())
+        assert out_dtype == torch.bfloat16 and use_fast_accum is False
+        if offset == 0:
+            assert scale_a is sa
+        return output
+
+    monkeypatch.setattr(torch, "_scaled_mm", scaled_mm)
+    assert fp8.forward_mm(a, b, sa, sb) is output
+    assert torch.equal(activation_storage, torch.arange(8).float().reshape(-1, 1))
+    assert torch.equal(weight_storage, torch.arange(40).float().reshape(-1, 1))
+
+
+def test_unknown_forward_backend_is_rejected(monkeypatch):
+    monkeypatch.setenv("RLFORGE_FP8_FORWARD", "unknown")
+    with pytest.raises(ValueError, match="native or torch"):
+        fp8.forward_mm(None, None, None, None)
+
+
 def test_install_preserves_master_parameters_and_checkpoint_keys():
     model = torch.nn.Sequential(torch.nn.Linear(64, 80), torch.nn.Linear(80, 32))
     params = tuple(model.parameters())
@@ -46,6 +79,24 @@ def test_optimizer_hook_invalidates_master_version(fused):
 
 
 _HOPPER = torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 9
+
+
+@pytest.mark.skipif(not _HOPPER, reason="Native FP8 requires Hopper or later")
+def test_shared_forward_scale_offsets_match_aligned_cuda_reference(monkeypatch):
+    monkeypatch.setenv("RLFORGE_FP8_FORWARD", "torch")
+    torch.manual_seed(37)
+    x = torch.randn(7, 1024, device="cuda", dtype=torch.bfloat16)
+    weight = torch.randn(256, 1024, device="cuda", dtype=torch.float32)
+    q, scales = fp8.quantize_rows(x)
+    wq, ws = fp8.quantize_rows(weight)
+    for index in range(4):
+        row = q[index:index + 1]
+        aligned = scales[index:index + 1].clone()
+        expected = torch._scaled_mm(row, wq.t(), scale_a=aligned,
+            scale_b=ws.t().contiguous(), out_dtype=torch.bfloat16, use_fast_accum=False)
+        actual = fp8.forward_mm(row, wq, scales[index:index + 1], ws)
+        assert torch.equal(actual, expected)
+        assert actual.dtype == torch.bfloat16 and torch.isfinite(actual).all()
 
 
 @pytest.mark.skipif(not _HOPPER, reason="Native FP8 requires Hopper or later")

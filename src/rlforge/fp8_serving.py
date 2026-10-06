@@ -4,6 +4,9 @@ Registered through the ``vllm.general_plugins`` entry point. Select
 ``--quantization poor_rl_fp8`` with TP=1 and BF16 KV/recurrent state.
 """
 
+import os
+from types import MethodType
+
 import torch
 from weakref import WeakSet
 
@@ -84,6 +87,9 @@ class MasterFP8LinearMethod(Fp8PtpcOnlineLinearMethod):
             raise ValueError(
                 "poor_rl_fp8 requires --dtype bfloat16 for the shared activation contract."
             )
+        backend = os.environ.get("RLFORGE_FP8_FORWARD", "native")
+        if backend not in ("native", "torch"):
+            raise ValueError("RLFORGE_FP8_FORWARD must be native or torch")
         # Layerwise hot reload restores this metadata, so every new FP32 policy
         # reaches the quantizer without an intermediate BF16 weight round.
         super().create_weights(
@@ -99,6 +105,19 @@ class MasterFP8LinearMethod(Fp8PtpcOnlineLinearMethod):
             force_kernel=CutlassFP8ScaledMMLinearKernel,
             module_name=type(self).__name__,
         )
+        if backend == "torch":
+            self.fp8_linear.apply_scaled_mm = MethodType(_shared_scaled_mm, self.fp8_linear)
+
+
+def _shared_scaled_mm(self, *, A, B, out_dtype, As, Bs, bias, output_shape):
+    from rlforge.fp8 import forward_mm
+
+    if (out_dtype != torch.bfloat16 or bias is not None
+            or B.shape != (A.shape[1], self.logical_output_size)):
+        raise ValueError("Shared FP8 forward requires aligned BF16 output without bias")
+    scales = Bs.t() if Bs.ndim == 2 else Bs
+    result = forward_mm(A, B.t(), As, scales)
+    return result.view(*output_shape[:-1], self.logical_output_size)
 
 
 class MasterFP8Config(QuantizationConfig):

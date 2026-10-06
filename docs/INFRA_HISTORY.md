@@ -47,7 +47,7 @@ FP8完整混合精度MFU暂无，不能套用BF16峰值。本轮数据与源码�
 - **FP8早期优化**：Norm反向保存输入并重算中间值，减少activation checkpoint；统一backward布局，总吞吐提高14.1%。
 - **FP8新配方**：融合conv＋SiLU、仅打包小维度Norm反向；减少native scheduler／KV bookkeeping和输出处理；缓存sampled-token文本并使用FlatLogprobs；提前在独立卡计算完整BF16 reference；真实microbatch增大到1024，使用整数token计数和丢弃审计。保持FP32主参数、梯度和Adam，以及BF16 attention KV。
 - **Judge链路**：修复首个地址连接卡住时的取消与回退，每地址TCP／TLS预算3秒，保持整体89秒deadline；复用健康连接，及时判分恢复至98.1%。
-- **未采用的修改**：FP8 attention KV完整cohort慢11.9%；两个独立G32合并投影＋MLP虽logprob逐值一致，却慢9.7%、显存113.8 GiB；MB2048也因rollout等待未达到2×。训推仍在修复GDN recurrence的状态布局与计算顺序，两端同步修改。
+- **未采用的修改**：FP8 attention KV完整cohort慢11.9%；两个独立G32合并投影＋MLP虽logprob逐值一致，却慢9.7%、显存113.8 GiB；MB2048也因rollout等待未达到2×。GDN与其他训推对齐候选的整模型gate仍未通过，本轮保留实验源码与证据。
 
 可选原生logprob缓存已集成为`RLFORGE_SERVING_LOGPROBS_CACHE=1`（默认关闭，安装包后由vLLM general plugin加载）；58,262位置的原生字段、UTF-8及累计logprob逐值一致，main／spawn均通过。开启时需使用记录的vLLM源码版本；stream／top-K／echo等请求回到原生路径。
 
@@ -56,3 +56,7 @@ FP8完整混合精度MFU暂无，不能套用BF16峰值。本轮数据与源码�
 同八卡对齐实测，v3.2总吞吐是v1的**27.2倍**；同4＋5卡历史记录，v3.1e→v3.2提高**1.72倍**。
 
 可选decode调度与输出处理已集成为`RLFORGE_SERVING_DECODE=1`（默认关闭），保留原生边界fallback与依赖源码检查。11,776步原生状态对照、13种混合场景和main／spawn均通过；整理后的单卡完整生成比冻结实验链慢1.9%，尚未证明完整RL无回归，不替换上表实验配方。
+
+本轮收束新增可选`RLFORGE_FP8_FORWARD=torch`（两端进程都需设置，默认`native`）：trainer与自身serving投影／head共用Torch原生FP8 GEMM，修复16-byte scale指针对齐，FP8输入和BF16输出保持不变；H200测试32 passed。同一单卡fixture、15层checkpoint、完整本地BF16 reference下，BF16／原生FP8／共享Torch FP8为2,908／1,760／1,794 ms，峰值显存86.59／53.23／53.23 GiB；共享前向额外耗时1.89%。fixture重放历史completion到共同prompt，原始配对不可得，仅代表计算对照。FP32 Adam另一次CUDA实测6.41 ms，约占该固定G32 policy compute的0.53%。
+
+已用实际输入定位residual舍入、SwiGLU、主／gated RMSNorm和FA3 split规则差异；算子gate通过，整模型训推仍未通过。固定split候选的128 token logprob差p90：trainer–decode 0.1154、trainer–prefill 0.0863、prefill–decode 0.0835，门槛0.004；它尚未与最新pointwise候选完整组合。融合候选修复QK布局后，同一训练计算路径的整模型前向logprob逐值一致，计算快3.65%、显存75.76→61.27 GiB；梯度误差与原实现重复运行接近，但严格梯度gate失败，未集成。近似混合精度useful peak-equivalent为17.27%（单卡含本地reference），整模型／完整RL MFU仍未实测；不替换表中的MFU。详细数值、gate和源码哈希见[FP8证据](reports/FP8_SCALE_2026-10-05.json)。
