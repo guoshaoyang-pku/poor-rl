@@ -78,6 +78,30 @@ v0、v1 与旧 4＋4 BF16 对照使用同 checkpoint、KL reference、数据和�
 
 分母均为全部 sequence；实际 clip 指 surrogate 对 ratio 的平坦分支，不是梯度范数裁剪。放宽 high 几乎没有作用，放宽 low 可减少平坦分支；这不能证明训练质量改善，也不能修复当前训推数值偏差与 policy age。日志的 token clip 约 17.1%／9.3%，与上表的 GSPO sequence clip 不同。
 
+### MFU／稀疏化排查
+
+四卡真实训练捕获一暖机后的 step；另做同 checkpoint 的单 H200 算子与固定 G32 对照。Linear、MLP 和 LM head 的 **dgrad／wgrad 已使用原生 FP8**：前向权重／激活 E4M3，反向梯度 E5M2，GEMM 高精度累加并写回 FP32 参数梯度；主参数和 Adam 为 FP32。attention、GDN、norm／conv 和归约仍有 BF16／FP32 运算。
+
+| 排查项 | 数字 | 结论／范围 |
+|---|---:|---|
+| FP32 Adam | 6.43 ms／G32 | 独立暖机 GPU 计时，非四卡整步 |
+| 权重同步 | 0.263 秒／步 | 未 profile 的 4＋6，占总墙钟 0.46% |
+| 梯度同步 | 61 buckets／update，3.010 GB FP32 | 仅末尾一次 DDP backward；没有逐 G32 全量通信 |
+| 最后 DDP backward | 1.05–1.10 秒；NCCL 与计算不重叠 0.05–0.36 秒 | 四卡 trace，含本地反向；不是纯 wire 时间 |
+| batch 准备 | collator 2.07 秒／步；每 rank H2D 1.007 GB | 完整 batch 先广播再 slice；理想分片约 0.252 GB／rank |
+| 指标 gather | 72 bytes／rank；rank0 3.089 秒 | rank 到达差 3.087 秒；不是传输百字节耗时三秒 |
+| 计算提交 | 每 rank 约 50 个 subbatch／步 | MB1024、GAS1；trace step 每 rank 108–114 万 kernel |
+| GPU 时间占比 | trace 训练区间 69–77% 有 GPU 活动 | 包含 NCCL 等待；profile 放大耗时，不能当生产 SM 利用率或可省预算 |
+| 原生 2:4 sparse FP8 | 大 down GEMM 最好 1.38×，head 1.03× | 改为 tensorwise scale 的单算子诊断；原 rowwise 大 GEMM 多数更慢 |
+| 零梯度 head | 固定 G32 compute 1.0018×，wall 0.9989× | 无整模型净收益；真实 token／权重，合成 advantage／old logprob，未使用生产 clip mask |
+| 固定 head tile Graph | eager 0.481 ms → graph 0.563 ms（0.855×） | 含全部输入刷新、输出 clone；数值／新权重检查通过，graph＋静态输入占 378 MiB |
+
+主吞吐仍为 **151,401 token/s＝76.78×v1**。本轮 100×目标按 v1 的 1,972 token/s 计算：**197,200 token/s**；同工作量和其他等待不变，compute 需 **47.82→34.39 秒／步**。同方法 MFU 14.31%→20% 对应 **34.22 秒／步**，均未达到。trace 的约 40 秒 profiler stop 开销与被扰动的 step 不计入吞吐。
+
+优先减少 conv／norm／GDN、量化与反向写回的成本，提前生成 host 的 G32／索引计划，再处理 collator／整份 batch 复制及 4＋6 admission。生产 43.85% 是 GSPO 平坦分支的**序列比例**；先统计真实 inactive token 和完整零梯度 subbatch，再决定跳过反向。2:4 权重稀疏不会自动加速 wgrad，行 mask 也未必满足 dgrad 的转置约束；本轮稀疏和 Graph 候选均未启用。
+
+训推共同前向仍需对齐权重／scale、量化粒度、prefill／decode 与 GDN state；上面的整模型 gate 仍未通过。原始数值、源码哈希及测量边界：[本轮排查证据](reports/V4_MFU_SPARSE_2026-10-06.json)、[探针与 trace 解析源码](reports/V4_MFU_SPARSE_2026-10-06_sources.tar.gz)。
+
 ### 改动简述
 
 - **v0→v1**：主参数和优化器保持 FP32，训练计算改为 BF16 autocast；v0 使用 SDPA＋PyTorch fallback。
