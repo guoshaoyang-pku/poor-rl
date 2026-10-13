@@ -72,6 +72,16 @@ for scope and explicitly out-of-scope items.
 Scope: RL post-training of generative models at single-node scale. For classic
 control (DQN etc.) use Stable-Baselines3/CleanRL; for ≥8B or multi-node use verl.
 
+## AIQ-RL v1.0 training questions
+
+[AIQ-RL v1.0](releases/aiq-rl-v1.0/) releases the complete frozen 6k RL mainline:
+6,153 training questions and 290 held-out questions, with answer labels,
+original prompts, the consumed thinking inputs, split provenance and SHA256 checksums.
+It is a separate RL dataset version; the official ArchitectureIQ benchmark remains v1.5.
+Download the [versioned archive](https://github.com/guoshaoyang-pku/poor-rl/releases/tag/aiq-rl-v1.0),
+or use the identical [official ArchitectureIQ release](https://github.com/renrua52/ArchitectureIQ/releases/tag/aiq-rl-v1.0).
+The dataset README records source-specific audit limits and repeated held-out use.
+
 ## Documentation
 
 | Doc | Contents |
