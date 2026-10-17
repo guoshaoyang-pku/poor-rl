@@ -773,6 +773,9 @@ def main():
                     help="int64 rollout token metadata on the supported TRL collator; fail on source mismatch")
     ap.add_argument("--max-completion", type=int, default=16384)
     ap.add_argument("--max-staleness", type=int, default=4)
+    ap.add_argument("--rollout-ahead-batches", type=int, choices=[1], default=None,
+                    help="Cap proactive work at current optimizer batch plus one future batch; "
+                         "includes generation, scoring and queued samples, with strict max-staleness.")
     ap.add_argument("--max-inflight-tasks", type=int, default=128)
     ap.add_argument("--save-steps", type=int, default=50)
     ap.add_argument("--server-url", default="http://localhost:8000")
@@ -913,7 +916,7 @@ def main():
     if args.fp8_align != "off" and args.fp8 != "native":
         raise SystemExit("--fp8-align vllm requires --fp8 native")
 
-    if (args.score_concurrency > 0 or args.reward_early_hooks
+    if (args.rollout_ahead_batches or args.score_concurrency > 0 or args.reward_early_hooks
             or (args.judged_max_staleness is not None and args.judged_max_staleness >= 0)):
         from rlforge.score_loop import install as _install_score_loop
         if args.judged_max_staleness is None:
@@ -926,6 +929,8 @@ def main():
             early_hooks=args.reward_early_hooks,
             max_staleness=args.max_staleness,
             score_task_max_s=args.score_task_max_s,
+            ahead_batch_samples=(args.completions_per_step * int(os.environ.get("WORLD_SIZE", "1"))
+                                 if args.rollout_ahead_batches else 0),
         )
 
     if args.allow_tf32:
@@ -1068,6 +1073,9 @@ def main():
         train_dataset=ds,
         **trainer_kwargs,
     )
+    if args.rollout_ahead_batches:
+        from rlforge.stream_dispatch import install as install_stream_dispatch
+        install_stream_dispatch(trainer)
     if args.fp8 == "native":
         from rlforge.fp8 import install as install_fp8
         trainer._native_fp8 = True
