@@ -67,3 +67,11 @@ Full-parameter LR is 2e-6 at B=1024 and scales with √B. LoRA LR is 10× that.
 `lr_lora = 2e-5 · sqrt(B/1024) = 1e-5 · sqrt(B/256)`
 
 That gives 2.83e-5 at B=2048. B is completions per optimizer update across all ranks. Change kernel and micro-batch sizes freely; change LR only through B.
+
+## Eval and data (4B A100 line, 2026-10-17)
+
+| Pitfall | How to tell | Fix |
+|---|---|---|
+| Live eval used the trainer's `trl-policy-vK` adapter | The trainer unloads old versions on its own schedule. Requests then failed, the failures were dropped, and accuracy came from a subset | `eval_live.py` loads each checkpoint as its own `eval-<run>-ckN` adapter, which needs one spare LoRA slot (`MAX_LORAS`). It retries failures and writes a point only when `errors == 0`. |
+| Unshuffled training file | Rows 6000+ of `aiq_rl_v1.2_d2fix/train_think.jsonl` are all `ranking_fleet_20261007`, so a run started mid-file trains on ranking only | Train from a seeded shuffle (`train_think_shuf20261017.jsonl` + `.meta.json`, `DATA=` in `make_plan.py`). The whole set is 88% ranking. |
+| Look-ahead of one batch with B equal to all rollout slots | One batch is admitted per version bump, it runs its long tail alone, and trainer waits alternate between 2 s and 600 s | `--rollout-ahead-batches 2` (must be < max_staleness). Scale `--queue-maxsize` and `--max-inflight-tasks` to (1+K)·B. |

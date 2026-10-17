@@ -58,15 +58,15 @@ def launch(rank):
             '--mixed_precision', 'bf16', '--dynamo_backend', 'no', '-m', 'rlforge.trainer']
 
 
-trainer = ['--model', MODEL, '--server-url', f'http://{TRAINER_NODES[0]}:8300', '--train', f'{NFS}/data/train_think.jsonl',
+trainer = ['--model', MODEL, '--server-url', f'http://{TRAINER_NODES[0]}:8300', '--train', os.environ.get('DATA', f'{NFS}/data/train_think.jsonl'),
            '--out', f'{RUN}/trainer_out', '--epochs', '10', '--lr', f'{LR:.4g}',
            '--completions-per-step', str(CPS_PER_RANK), '--num-generations', str(NGEN), '--max-completion', '16384',
            '--max-steps', MAX_STEPS, '--save-steps', os.environ.get('SAVE_STEPS', '10'),
-           '--max-staleness', '3', '--rollout-ahead-batches', os.environ.get('AHEAD', '1'), '--max-inflight-tasks', str(2 * B),
+           '--max-staleness', '3', '--rollout-ahead-batches', os.environ.get('AHEAD', '1'), '--max-inflight-tasks', str((1 + int(os.environ.get('AHEAD', '1'))) * B),
            '--report-to', 'none', '--reward', 'aiq_think_reward_v4:think_reward', '--request-timeout', '5400',
            '--gspo', '--gspo-norm', 'seq_mean', '--gspo-eps-low', '4e-3', '--gspo-eps-high', '4e-3',
            '--per-seq-forward', 'auto', '--kl-beta', '0', '--prefix-share', 'on', '--token-budget', '0',
-           '--dp-route', 'off', '--queue-maxsize', str(2 * B),  # 512 < B throttled rollout via score backpressure (r6)
+           '--dp-route', 'off', '--queue-maxsize', str((1 + int(os.environ.get('AHEAD', '1'))) * B),  # 512 < B throttled rollout via score backpressure (r6)
            '--score-concurrency', '32', '--judged-max-staleness', '-1',
            '--drop-audit', 'on', '--subbatch-tokens', os.environ.get('SB_TOKENS', '32768'), '--sb-ckpt', 'auto',
            '--balance-rows', 'on', '--dtype', 'bfloat16',
