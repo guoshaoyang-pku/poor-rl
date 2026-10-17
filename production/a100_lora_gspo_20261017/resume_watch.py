@@ -26,7 +26,7 @@ RESUMABLE = ('trainer exited rc=', 'trainer rank crashed', 'trainer worker node'
              'router exited rc=')  # head.py fail() reasons; the rest (signal, backends, router start) need a human
 KNOBS = ('MODEL', 'TRAINER_NODES', 'CPS_PER_RANK', 'MAX_STEPS', 'SAVE_STEPS', 'SB_TOKENS', 'SB_ACT_GB', 'MIN_HEALTHY',
          'INIT_ADAPTER', 'DATA_START', 'PRIOR_UPDATES', 'NGEN', 'CURRICULUM', 'STAGE', 'STAGE_DONE',
-         'DROP_ZERO_VAR', 'ROLLOUT_HOSTS')  # the make_plan.py environment
+         'DROP_ZERO_VAR', 'ROLLOUT_HOSTS', 'AHEAD')  # the make_plan.py environment
 RESUME_FLAGS = ('--init-adapter', '--dataset-start-index')
 STAGE_FLAGS = ('--num-generations', '--max-steps')  # may change at a curriculum stage advance / mid-stage resume
 
@@ -223,6 +223,7 @@ def derive(run, kit, advance=False):
                MIN_HEALTHY=str(plan['min_healthy']), MODEL=argval(argv, '--model'), DATA_START=str(start),
                ROLLOUT_HOSTS=','.join(sorted({b['url'].split('//')[1].split(':')[0] for b in plan['backends']})),
                PRIOR_UPDATES=str(prior), NGEN=argval(argv, '--num-generations'),
+               AHEAD=argval(argv, '--rollout-ahead-batches') or '1',
                DROP_ZERO_VAR=plan['env'].get('RLFORGE_DROP_ZERO_VAR', '0'), **({'INIT_ADAPTER': init} if init else {}))
     cur = plan.get('curriculum')
     if cur:

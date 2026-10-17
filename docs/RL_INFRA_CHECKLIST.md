@@ -20,6 +20,7 @@ These are lessons from the production lines: 0.8B on H200/H100 and 4B LoRA on 5�
 | Look-ahead gate polling | About 30% went to `sleep(0.01)` loops across thousands of tasks | One pump coroutine with the same admission rule; T3. |
 | `asyncio.wait(all inflight, FIRST_COMPLETED)` | About 13% at 8k in-flight tasks | O(done) wait proxy; T2. |
 | `--queue-maxsize` smaller than the batch | The log says `all 32 scoring slots busy … rollout-buffer backpressure`, then backends drain to 0 | Use queue ≥ 2B. The A100 4B run had 512 against B=2048. |
+| One batch of look-ahead with B equal to the slot count | A100 4B r7: B=2048 on 16×128 slots. Each version bump admits one whole batch, which starts together and drains through its tail; `perf/rollout_wait_s` alternates 2–28 s and 225–298 s | `--rollout-ahead-batches K` (`AHEAD=K` in the A100 kit) admits K future batches; K must be below `--max-staleness`. Watch the staleness histogram and the long-length drop fractions in `drop_audit`: long samples dropped as stale are a length bias. |
 
 ## Rollout servers
 

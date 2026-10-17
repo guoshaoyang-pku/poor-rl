@@ -210,9 +210,11 @@ class ConcurrentScoreMixin:
 
     def __init__(self, *, score_concurrency: int = 1, tag_judged: bool = False,
                  early_hooks: bool = False, score_task_max_s: float | None = None,
-                 saturation_warn_s: float = 30.0, ahead_batch_samples: int = 0, **kwargs):
+                 saturation_warn_s: float = 30.0, ahead_batch_samples: int = 0, ahead_batches: int = 1,
+                 **kwargs):
         super().__init__(**kwargs)
         self._ahead_batch_samples = int(ahead_batch_samples)
+        self._ahead_batches = int(ahead_batches)  # K future batches admitted beyond the one being trained
         self._ahead_dropped = self.rollout_buffer._dropped if ahead_batch_samples else None
         self._ahead_admitted = 0
         self._zero_var_dropped = 0
@@ -293,7 +295,7 @@ class ConcurrentScoreMixin:
         return result
 
     def _ahead_try_admit(self, group_id) -> bool:
-        limit = ((self.model_version - self._ahead_origin + 2) * self._ahead_batch_samples
+        limit = ((self.model_version - self._ahead_origin + 1 + self._ahead_batches) * self._ahead_batch_samples
                  + self._ahead_dropped.value)
         if (group_id == self._ahead_next_group
                 and self._ahead_admitted + self.num_generations <= limit):
@@ -692,7 +694,8 @@ JUDGED_AUTO_EXTRA = 2  # auto cap = max_staleness + 2 (covers a 90 s judge wait 
 
 def install(score_concurrency: int = 0, judged_max_staleness: int | str | None = "auto",
             early_hooks: bool = False, max_staleness: int | None = None,
-            score_task_max_s: float | None = None, ahead_batch_samples: int = 0) -> bool:
+            score_task_max_s: float | None = None, ahead_batch_samples: int = 0,
+            ahead_batches: int = 1) -> bool:
     """Patch TRL's async GRPO trainer module to use the classes above. Returns True if anything
     was installed. score_concurrency=0 and no other option = no-op (stock TRL).
 
@@ -701,6 +704,11 @@ def install(score_concurrency: int = 0, judged_max_staleness: int | str | None =
     if ahead_batch_samples:
         if ahead_batch_samples < 0 or max_staleness is None:
             raise ValueError("ahead gate needs positive batch samples and explicit max_staleness")
+        k = int(ahead_batches)
+        if k < 1 or (k > 1 and k >= int(max_staleness)):
+            # a group admitted K batches early is trained at staleness ~K; one batch of tail delay must stay <= cap.
+            # K=1 keeps its original contract (no extra constraint).
+            raise ValueError(f"ahead_batches={ahead_batches}: need K=1, or 1 < K < max_staleness={max_staleness}")
         if judged_max_staleness not in (None, "auto"):
             raise ValueError("ahead gate requires a strict staleness cap; disable judge allowance")
         judged_max_staleness = None
@@ -732,6 +740,7 @@ def install(score_concurrency: int = 0, judged_max_staleness: int | str | None =
               "rollouts that finish first (short CoTs); see NONBLOCKING_SCORING_2026-10-03.md", flush=True)
     ConcurrentScoreWorker.extra_loop_kwargs = {
         "ahead_batch_samples": int(ahead_batch_samples),
+        "ahead_batches": int(ahead_batches),
         "score_concurrency": max(1, int(score_concurrency)),
         "tag_judged": tag,
         "early_hooks": bool(early_hooks),

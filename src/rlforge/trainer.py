@@ -776,9 +776,10 @@ def main():
                     help="int64 rollout token metadata on the supported TRL collator; fail on source mismatch")
     ap.add_argument("--max-completion", type=int, default=16384)
     ap.add_argument("--max-staleness", type=int, default=4)
-    ap.add_argument("--rollout-ahead-batches", type=int, choices=[1], default=None,
-                    help="Cap proactive work at current optimizer batch plus one future batch; "
-                         "includes generation, scoring and queued samples, with strict max-staleness.")
+    ap.add_argument("--rollout-ahead-batches", type=int, choices=[1, 2, 3], default=None,
+                    help="Cap proactive work at the current optimizer batch plus K future batches; "
+                         "includes generation, scoring and queued samples, with strict max-staleness "
+                         "(K must be below --max-staleness).")
     ap.add_argument("--max-inflight-tasks", type=int, default=128)
     ap.add_argument("--save-steps", type=int, default=50)
     ap.add_argument("--server-url", default="http://localhost:8000")
@@ -950,6 +951,7 @@ def main():
             score_task_max_s=args.score_task_max_s,
             ahead_batch_samples=(args.completions_per_step * int(os.environ.get("WORLD_SIZE", "1"))
                                  if args.rollout_ahead_batches else 0),
+            ahead_batches=args.rollout_ahead_batches or 1,
         )
 
     if args.allow_tf32:

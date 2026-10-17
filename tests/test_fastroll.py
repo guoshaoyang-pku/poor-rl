@@ -104,9 +104,10 @@ class Old(Base):
         return await super()._generate_one(prompt, tool_dict, tools, group_id)
 
 
-def make(cls):
+def make(cls, ahead=1):
     o = cls.__new__(cls)
-    o.__dict__.update(_ahead_batch_samples=B, _ahead_dropped=SimpleNamespace(value=0), _ahead_admitted=0,
+    o.__dict__.update(_ahead_batch_samples=B, _ahead_batches=ahead, _ahead_dropped=SimpleNamespace(value=0),
+                      _ahead_admitted=0,
                       _ahead_origin=None, _ahead_groups={}, _ahead_next_group=0, _ahead_waiters={},
                       _ahead_pump=None, num_generations=G, model_version=0, _early_hooks=[])
     return o
@@ -120,7 +121,7 @@ async def sim(o):
 
     async def monitor():
         while True:
-            if o._ahead_admitted > (o.model_version + 2) * B:
+            if o._ahead_admitted > (o.model_version + 1 + getattr(o, "_ahead_batches", 1)) * B:
                 violations.append((o._ahead_admitted, o.model_version))
             await asyncio.sleep(0.001)
 
@@ -192,8 +193,29 @@ def test_ahead_pump():
     t3()
 
 
+# ---- T4: deeper look-ahead (K=2) keeps the same cap and stays within max_staleness ----------
+def t4():
+    res = {k: asyncio.run(sim(make(New, ahead=k))) for k in (1, 2)}
+    for k, r in res.items():
+        assert r["violations"] == 0 and r["max_stale"] <= 3, (k, r)
+    assert res[2]["mean_stale"] >= res[1]["mean_stale"], res
+    print(f"T4 ok: ahead K=1 {res[1]}, K=2 {res[2]}")
+
+
+def test_ahead_depth():
+    t4()
+
+
+def test_ahead_depth_validated():
+    for k, stale in ((3, 3), (0, 3), (2, 2)):
+        with pytest.raises(ValueError):
+            SL.install(score_concurrency=1, max_staleness=stale, ahead_batch_samples=B, ahead_batches=k,
+                       judged_max_staleness=None)
+
+
 if __name__ == "__main__":
     t1(sys.argv[1], sys.argv[2])
     t2()
     t3()
+    t4()
     print("ALL OK")
