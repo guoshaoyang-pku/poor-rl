@@ -759,6 +759,37 @@ def _patch_attention_for_old_gpus() -> None:
     print(f"[rlforge] pre-Hopper GPU detected: attention implementation -> {_old_gpu_attn}")
 
 
+def _fix_checkpoint_prompt_index(trainer):
+    """Record where the prompt stream actually stands when groups are dropped before the trainer.
+
+    TRL writes `rollout_state.json` with `prompt_index = dataset_start_index + first group id not in
+    _trained_groups`. With RLFORGE_DROP_ZERO_VAR=1 a dropped group is never trained, so the first dropped
+    id caps the recorded index for the rest of the run: the A100 4B r7 checkpoint-10 recorded 14 after
+    2560 groups. A resume would then replay nearly the whole run. Groups are admitted in order, so the
+    stream really stands just past the highest group the trainer has seen.
+    """
+    inner = trainer._save_checkpoint
+
+    def _save_checkpoint(model, trial):
+        inner(model, trial)
+        trained = getattr(trainer, "_trained_groups", None)
+        if not trainer.accelerator.is_main_process or not trained:
+            return
+        path = os.path.join(trainer._get_output_dir(trial=trial),
+                            f"checkpoint-{trainer.state.global_step}", "rollout_state.json")
+        if not os.path.isfile(path):
+            return
+        with open(path) as f:
+            state = json.load(f)
+        start = trainer.rollout_worker._loop_kwargs["dataset_start_index"]
+        state["prompt_index"] = start + max(trained) + 1
+        state["groups_trained"] = len(trained)
+        with open(path, "w") as f:
+            json.dump(state, f)
+
+    trainer._save_checkpoint = _save_checkpoint
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="local model path or HF model id")
@@ -1119,6 +1150,8 @@ def main():
         assert not bad, f"init adapter key mismatch: {bad[:5]}"
         n = sum(1 for k, v in policy.named_parameters() if "lora_" in k)
         print(f"[rlforge] init adapter loaded from {args.init_adapter}: {len(sd)} tensors -> {n} lora params", flush=True)
+    if os.environ.get("RLFORGE_DROP_ZERO_VAR") == "1":
+        _fix_checkpoint_prompt_index(trainer)
     if args.rollout_ahead_batches:
         from rlforge.stream_dispatch import install as install_stream_dispatch
         install_stream_dispatch(trainer)

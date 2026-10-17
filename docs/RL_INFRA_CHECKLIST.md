@@ -41,6 +41,7 @@ These are lessons from the production lines: 0.8B on H200/H100 and 4B LoRA on 5Ã
 | Sub-batches too small | `v3_2/subbatches_per_row` of 18 and pad of 20% | Raise sub-batch tokens once memory allows. Smaller G (curriculum) shortens rows. |
 | Load imbalance across ranks | `batch/row_imbalance` 1.5 with G32 (4 groups per rank) | Use smaller G or more groups per rank, with `--balance-rows on`. |
 | Weights-only LoRA checkpoints | There is no optimizer.pt | Continue with `--init-adapter` + `--dataset-start-index` (the rollout_state `prompt_index`). Adam restarts with warmup. |
+| Dropped groups rewind the resume point | TRL records `prompt_index` as the first group id never trained; with the zero-variance drop on, r7's checkpoint-10 recorded 14 after 2560 groups, so a resume would replay the run | `_fix_checkpoint_prompt_index` rewrites it from the highest group the trainer saw. Check `rollout_state.json` against steps x groups-per-step before resuming an older checkpoint. |
 
 ## Reference step times: A100 4B LoRA GSPO, B=2048, 16 trainer GPUs (2 nodes, TCP), 16 rollout GPUs
 
