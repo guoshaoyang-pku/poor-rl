@@ -75,3 +75,10 @@ That gives 2.83e-5 at B=2048. B is completions per optimizer update across all r
 | Live eval used the trainer's `trl-policy-vK` adapter | The trainer unloads old versions on its own schedule. Requests then failed, the failures were dropped, and accuracy came from a subset | `eval_live.py` loads each checkpoint as its own `eval-<run>-ckN` adapter, which needs one spare LoRA slot (`MAX_LORAS`). It retries failures and writes a point only when `errors == 0`. |
 | Unshuffled training file | Rows 6000+ of `aiq_rl_v1.2_d2fix/train_think.jsonl` are all `ranking_fleet_20261007`, so a run started mid-file trains on ranking only | Train from a seeded shuffle (`train_think_shuf20261017.jsonl` + `.meta.json`, `DATA=` in `make_plan.py`). The whole set is 88% ranking. |
 | Look-ahead of one batch with B equal to all rollout slots | One batch is admitted per version bump, it runs its long tail alone, and trainer waits alternate between 2 s and 600 s | `--rollout-ahead-batches 2` (must be < max_staleness). Scale `--queue-maxsize` and `--max-inflight-tasks` to (1+K)·B. |
+
+## Profiling the trainer (r9, 2026-10-17)
+
+| Pitfall | How to tell | Fix |
+|---|---|---|
+| `perf/mfu_*` used an H100 peak on every GPU | TRL `compute_mfu` defaults to 989.5 TF. On A100 (312 TF) the "13%" was really about 42% on TRL's own FLOP convention | `_patch_mfu_peak()` in `rlforge.trainer` uses the device's bf16 peak (`RLFORGE_PEAK_TFLOPS` overrides). TRL's FLOP count also assumes every layer is full attention and charges full-parameter backward. For Qwen3.5-4B LoRA with recompute, use about 27 GF/token: 8.4 GF of matmuls + about 0.4 GF of attention scores, times 3. |
+| Per-rank imbalance hidden by "SM 100%" | Sample power on all ranks at 1 s. r9: all 16 busy only 33% of the step, none busy 33% (rollout wait), some busy 34%. Ranks 0–3 busy 0.59–0.62, ranks 12–15 0.43–0.46 | Balance rows by cost (long sequences cost more per token), not by token count. |

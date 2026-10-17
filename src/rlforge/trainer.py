@@ -790,6 +790,25 @@ def _fix_checkpoint_prompt_index(trainer):
     trainer._save_checkpoint = _save_checkpoint
 
 
+def _patch_mfu_peak() -> None:
+    """TRL's compute_mfu divides by an H100 SXM peak (989.5 TF bf16) on every GPU, which understates MFU 3.17x on
+    A100 (312 TF). Use the local device's dense bf16 peak instead (env RLFORGE_PEAK_TFLOPS overrides)."""
+    if not torch.cuda.is_available():
+        return
+    import trl.experimental.async_grpo.async_grpo_trainer as agt
+
+    major, minor = torch.cuda.get_device_capability(0)
+    peak = float(os.environ.get("RLFORGE_PEAK_TFLOPS", 0)) * 1e12 or {
+        (8, 0): 312e12, (8, 6): 71e12, (8, 9): 165e12, (9, 0): 989.5e12}.get((major, minor), 989.5e12)
+    orig = agt.compute_mfu
+
+    def compute_mfu(flops_per_token, tokens_per_second, world_size, peak_flops_per_device=None):
+        return orig(flops_per_token, tokens_per_second, world_size, peak_flops_per_device or peak)
+
+    agt.compute_mfu = compute_mfu
+    print(f"[rlforge] MFU peak per device: {peak / 1e12:.1f} TFLOP/s (sm{major}{minor})", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="local model path or HF model id")
@@ -993,6 +1012,7 @@ def main():
         _apply_liger_base_kernels(args.model)
 
     _patch_attention_for_old_gpus()
+    _patch_mfu_peak()
     if os.environ.get("RLFORGE_FUSED_OPS"):
         # [v3_2] fused conv / norm / SwiGLU for Qwen3.5 (rlforge.fused_ops); trainer side only
         from rlforge.fused_ops import install as _install_fused
