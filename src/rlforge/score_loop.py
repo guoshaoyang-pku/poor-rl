@@ -75,6 +75,8 @@ from trl.experimental.async_grpo import async_grpo_trainer as _agt
 from trl.experimental.async_grpo import async_rollout_worker as _arw
 from trl.trainer.utils import print_prompt_completions_sample
 
+from rlforge import fast_rollout as _fast_rollout
+
 logger = _arw.logger
 
 JUDGED_KEY = "rlforge/judged"
@@ -217,6 +219,8 @@ class ConcurrentScoreMixin:
         self._ahead_origin = None
         self._ahead_groups = {}
         self._ahead_next_group = 0
+        self._ahead_waiters: dict[int, asyncio.Future] = {}
+        self._ahead_pump: asyncio.Future | None = None
         if self._ahead_batch_samples and (
                 self._ahead_batch_samples % self.num_generations
                 or self.max_inflight_tasks < self.num_generations
@@ -261,19 +265,18 @@ class ConcurrentScoreMixin:
 
     # ---- early per-rollout hook -------------------------------------------------------
     async def _generate_one(self, prompt, tool_dict, tools, group_id=0):
-        if self._ahead_batch_samples:
-            while group_id not in self._ahead_groups:
-                if self._ahead_origin is None:
-                    self._ahead_origin = self.model_version
-                limit = ((self.model_version - self._ahead_origin + 2) * self._ahead_batch_samples
-                         + self._ahead_dropped.value)
-                if (group_id == self._ahead_next_group
-                        and self._ahead_admitted + self.num_generations <= limit):
-                    self._ahead_admitted += self.num_generations
-                    self._ahead_next_group += 1
-                    self._ahead_groups[group_id] = self.model_version
-                    break
-                await asyncio.sleep(0.01)
+        if self._ahead_batch_samples and group_id not in self._ahead_groups:
+            # fastroll: same admission rule as the polling gate, but waiting tasks share one future
+            # per group and a single pump re-checks the limit (was: every task polled sleep(0.01)).
+            if self._ahead_origin is None:
+                self._ahead_origin = self.model_version
+            if not self._ahead_try_admit(group_id):
+                waiter = self._ahead_waiters.get(group_id)
+                if waiter is None:
+                    waiter = self._ahead_waiters[group_id] = asyncio.get_running_loop().create_future()
+                if self._ahead_pump is None or self._ahead_pump.done():
+                    self._ahead_pump = asyncio.ensure_future(self._ahead_pump_loop())
+                await asyncio.shield(waiter)
         result = await super()._generate_one(prompt, tool_dict, tools, group_id)
         if self._early_hooks:
             completion, completion_ids = result[0], result[1]
@@ -288,6 +291,29 @@ class ConcurrentScoreMixin:
             if any(h is not None for h in handles):
                 self._early.setdefault(group_id, []).append((completion, handles))
         return result
+
+    def _ahead_try_admit(self, group_id) -> bool:
+        limit = ((self.model_version - self._ahead_origin + 2) * self._ahead_batch_samples
+                 + self._ahead_dropped.value)
+        if (group_id == self._ahead_next_group
+                and self._ahead_admitted + self.num_generations <= limit):
+            self._ahead_admitted += self.num_generations
+            self._ahead_next_group += 1
+            self._ahead_groups[group_id] = self.model_version
+            waiter = self._ahead_waiters.pop(group_id, None)
+            if waiter is not None and not waiter.done():
+                waiter.set_result(None)
+            return True
+        return False
+
+    async def _ahead_pump_loop(self) -> None:
+        # model_version / dropped are shared mp.Values written by the trainer process, so the limit
+        # can only be re-read, not awaited: one coroutine re-checks it every 10 ms while groups wait.
+        while self._ahead_waiters and not self._stop_event.is_set():
+            group_id = self._ahead_next_group
+            if group_id in self._ahead_waiters and self._ahead_try_admit(group_id):
+                continue
+            await asyncio.sleep(0.01)
 
     # ---- per-group scoring ------------------------------------------------------------
     async def _score_group(self, group):
@@ -503,6 +529,11 @@ class ConcurrentScoreMixin:
             self._t_idle_start = time.monotonic()
 
     def run(self) -> None:
+        # fastroll (child process only): see rlforge/fast_rollout.py
+        cache = _fast_rollout.cache_chat_template(self.tokenizer)
+        fast_wait = _fast_rollout.install_fast_wait(_arw)
+        print(f"[rlforge][fastroll] chat-template cache + event ahead gate + O(done) wait installed "
+              f"(cache={cache}, wait_proxy={type(fast_wait).__name__})", flush=True)
         try:
             super().run()
         finally:

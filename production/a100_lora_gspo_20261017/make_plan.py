@@ -66,7 +66,8 @@ trainer = ['--model', MODEL, '--server-url', f'http://{TRAINER_NODES[0]}:8300', 
            '--report-to', 'none', '--reward', 'aiq_think_reward_v4:think_reward', '--request-timeout', '5400',
            '--gspo', '--gspo-norm', 'seq_mean', '--gspo-eps-low', '4e-3', '--gspo-eps-high', '4e-3',
            '--per-seq-forward', 'auto', '--kl-beta', '0', '--prefix-share', 'on', '--token-budget', '0',
-           '--dp-route', 'off', '--queue-maxsize', '512', '--score-concurrency', '32', '--judged-max-staleness', '-1',
+           '--dp-route', 'off', '--queue-maxsize', str(2 * B),  # 512 < B throttled rollout via score backpressure (r6)
+           '--score-concurrency', '32', '--judged-max-staleness', '-1',
            '--drop-audit', 'on', '--subbatch-tokens', os.environ.get('SB_TOKENS', '32768'), '--sb-ckpt', 'auto',
            '--balance-rows', 'on', '--dtype', 'bfloat16',
            '--lora', '--lora-r', '32', '--lora-alpha', '64', '--lora-target-modules', targets]
