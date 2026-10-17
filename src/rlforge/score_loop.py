@@ -75,6 +75,8 @@ from trl.experimental.async_grpo import async_grpo_trainer as _agt
 from trl.experimental.async_grpo import async_rollout_worker as _arw
 from trl.trainer.utils import print_prompt_completions_sample
 
+from rlforge import fast_rollout as _fast_rollout
+
 logger = _arw.logger
 
 JUDGED_KEY = "rlforge/judged"
@@ -197,6 +199,10 @@ def default_score_task_max_s() -> float:
     return max(600.0, 3.0 * judge_timeout)
 
 
+_DROP_ZERO_VAR = __import__("os").environ.get("RLFORGE_DROP_ZERO_VAR", "0") == "1"
+_AHEAD_EXTRA_FRAC = float(__import__("os").environ.get("RLFORGE_AHEAD_EXTRA_FRAC", "0.15"))
+
+
 # --------------------------------------------------------------------------- rollout loop
 class ConcurrentScoreMixin:
     """Concurrent score loop; combine with an `_AsyncRolloutLoop` subclass (see module docstring).
@@ -205,8 +211,25 @@ class ConcurrentScoreMixin:
 
     def __init__(self, *, score_concurrency: int = 1, tag_judged: bool = False,
                  early_hooks: bool = False, score_task_max_s: float | None = None,
-                 saturation_warn_s: float = 30.0, **kwargs):
+                 saturation_warn_s: float = 30.0, ahead_batch_samples: int = 0, ahead_batches: int = 1,
+                 **kwargs):
         super().__init__(**kwargs)
+        self._ahead_batch_samples = int(ahead_batch_samples)
+        self._ahead_batches = int(ahead_batches)  # K future batches admitted beyond the one being trained
+        self._ahead_extra_groups = 0  # groups admitted beyond the K=1 limit (budgeted, see _ahead_try_admit)
+        self._ahead_dropped = self.rollout_buffer._dropped if ahead_batch_samples else None
+        self._ahead_admitted = 0
+        self._zero_var_dropped = 0
+        self._ahead_origin = None
+        self._ahead_groups = {}
+        self._ahead_next_group = 0
+        self._ahead_waiters: dict[int, asyncio.Future] = {}
+        self._ahead_pump: asyncio.Future | None = None
+        if self._ahead_batch_samples and (
+                self._ahead_batch_samples % self.num_generations
+                or self.max_inflight_tasks < self.num_generations
+                or self.max_inflight_tasks % self.num_generations):
+            raise ValueError("ahead gate requires whole groups in batch and inflight limits")
         self.score_concurrency = max(1, int(score_concurrency))
         self.score_task_max_s = float(score_task_max_s) if score_task_max_s else default_score_task_max_s()
         self.saturation_warn_s = float(saturation_warn_s)
@@ -246,6 +269,18 @@ class ConcurrentScoreMixin:
 
     # ---- early per-rollout hook -------------------------------------------------------
     async def _generate_one(self, prompt, tool_dict, tools, group_id=0):
+        if self._ahead_batch_samples and group_id not in self._ahead_groups:
+            # fastroll: same admission rule as the polling gate, but waiting tasks share one future
+            # per group and a single pump re-checks the limit (was: every task polled sleep(0.01)).
+            if self._ahead_origin is None:
+                self._ahead_origin = self.model_version
+            if not self._ahead_try_admit(group_id):
+                waiter = self._ahead_waiters.get(group_id)
+                if waiter is None:
+                    waiter = self._ahead_waiters[group_id] = asyncio.get_running_loop().create_future()
+                if self._ahead_pump is None or self._ahead_pump.done():
+                    self._ahead_pump = asyncio.ensure_future(self._ahead_pump_loop())
+                await asyncio.shield(waiter)
         result = await super()._generate_one(prompt, tool_dict, tools, group_id)
         if self._early_hooks:
             completion, completion_ids = result[0], result[1]
@@ -261,8 +296,47 @@ class ConcurrentScoreMixin:
                 self._early.setdefault(group_id, []).append((completion, handles))
         return result
 
+    def _ahead_try_admit(self, group_id) -> bool:
+        # Base rule (K=1): the batch being trained plus one future batch. With K>1, groups beyond that base limit
+        # (up to K future batches) are admitted only while they stay within a budget: at most
+        # RLFORGE_AHEAD_EXTRA_FRAC (default 0.15) of all admitted groups, counted at admission. Staleness that
+        # grows later because a group runs a long tail is not charged to this budget.
+        if group_id != self._ahead_next_group:
+            return False
+        span = self.model_version - self._ahead_origin
+        base = (span + 2) * self._ahead_batch_samples + self._ahead_dropped.value
+        full = (span + 1 + self._ahead_batches) * self._ahead_batch_samples + self._ahead_dropped.value
+        after = self._ahead_admitted + self.num_generations
+        extra = after > base
+        if after > full:
+            return False
+        if extra:
+            groups = self._ahead_admitted // self.num_generations + 1
+            used = getattr(self, '_ahead_extra_groups', 0)
+            if (used + 1) > _AHEAD_EXTRA_FRAC * groups:
+                return False
+            self._ahead_extra_groups = used + 1
+        self._ahead_admitted = after
+        self._ahead_next_group += 1
+        self._ahead_groups[group_id] = self.model_version
+        waiter = self._ahead_waiters.pop(group_id, None)
+        if waiter is not None and not waiter.done():
+            waiter.set_result(None)
+        return True
+
+    async def _ahead_pump_loop(self) -> None:
+        # model_version / dropped are shared mp.Values written by the trainer process, so the limit
+        # can only be re-read, not awaited: one coroutine re-checks it every 10 ms while groups wait.
+        while self._ahead_waiters and not self._stop_event.is_set():
+            group_id = self._ahead_next_group
+            if group_id in self._ahead_waiters and self._ahead_try_admit(group_id):
+                continue
+            await asyncio.sleep(0.01)
+
     # ---- per-group scoring ------------------------------------------------------------
     async def _score_group(self, group):
+        if self._ahead_batch_samples:
+            group.model_version = self._ahead_groups.pop(group.group_id)
         if not self._pass_info:
             return await super()._score_group(group)
         n = len(group.completions)
@@ -379,6 +453,8 @@ class ConcurrentScoreMixin:
         t0 = time.monotonic()
         try:
             samples = await asyncio.wait_for(self._score_group(group), timeout=self.score_task_max_s)
+            if self._ahead_batch_samples and len(samples) != self.num_generations:
+                raise RuntimeError("ahead gate requires one training row per completion")
         except asyncio.TimeoutError:
             raise RuntimeError(
                 f"[score] group {group.group_id} not scored within {self.score_task_max_s:.0f}s "
@@ -410,6 +486,18 @@ class ConcurrentScoreMixin:
             if self.score_concurrency > 1:
                 # groups still being scored besides this one (0 = scorer had spare capacity)
                 payload["rollout/score_inflight"] = float(max(0, len(self._score_tasks) - 1))
+            if self._ahead_batch_samples:
+                # Cumulative gauges use max: TRL sums keys containing "total".
+                version = self.model_version
+                dropped = self._ahead_dropped.value
+                payload["rollout/ahead_admitted_max"] = float(self._ahead_admitted)
+                payload["rollout/ahead_dropped_max"] = float(dropped)
+                payload["rollout/ahead_model_version_max"] = float(version)
+                payload["rollout/ahead_credit_batches_max"] = (
+                    (self._ahead_admitted - dropped) / self._ahead_batch_samples
+                    - (version - self._ahead_origin))
+                payload["rollout/ahead_batch_samples"] = float(self._ahead_batch_samples)
+                payload["rollout/ahead_extra_frac"] = getattr(self, '_ahead_extra_groups', 0) / max(1, self._ahead_admitted // self.num_generations)
             self._push_metrics(payload)
             self._pushed_completion_tokens = self._total_completion_tokens
             self._pushed_at = now
@@ -424,6 +512,19 @@ class ConcurrentScoreMixin:
                     num_samples=self.num_completions_to_print,
                 )
             self._total_groups_scored += 1
+
+            # [q35-4b-a100] RLFORGE_DROP_ZERO_VAR=1: a group whose advantages are all zero (every completion got the
+            # same reward) contributes no policy gradient, so it never reaches the trainer. Its samples are credited
+            # to the look-ahead gate's drop counter, which admits replacement groups: B stays B informative samples.
+            if _DROP_ZERO_VAR and samples and all(abs(s.advantage) < 1e-9 for s in samples):
+                self._zero_var_dropped += 1
+                if self._ahead_dropped is not None:
+                    with self._ahead_dropped.get_lock():
+                        self._ahead_dropped.value += len(samples)
+                self._push_metrics({"rollout/zero_var_dropped_groups_max": float(self._zero_var_dropped),
+                                    "rollout/zero_var_dropped_frac": self._zero_var_dropped / self._total_groups_scored})
+                self._t_idle_start = time.monotonic()
+                return
 
             for sample in samples:
                 t_blocked = None
@@ -447,6 +548,11 @@ class ConcurrentScoreMixin:
             self._t_idle_start = time.monotonic()
 
     def run(self) -> None:
+        # fastroll (child process only): see rlforge/fast_rollout.py
+        cache = _fast_rollout.cache_chat_template(self.tokenizer)
+        fast_wait = _fast_rollout.install_fast_wait(_arw)
+        print(f"[rlforge][fastroll] chat-template cache + event ahead gate + O(done) wait installed "
+              f"(cache={cache}, wait_proxy={type(fast_wait).__name__})", flush=True)
         try:
             super().run()
         finally:
@@ -491,10 +597,16 @@ class ConcurrentScoreWorker(_arw.AsyncRolloutWorker):
     install order), with `extra_loop_kwargs` added."""
 
     extra_loop_kwargs: dict = {}
+    ahead_max_staleness: int = 3
 
     def __init__(self, **kwargs):
         super().__init__(**{**kwargs, **type(self).extra_loop_kwargs})
         self._loop_cls = resolve_loop_cls(_arw.AsyncRolloutWorker._loop_cls)
+        if self._loop_kwargs.get("ahead_batch_samples", 0):
+            dropped = self._mp_ctx.Value("q", 0)
+            self.rollout_buffer = _AheadQueue(
+                self.rollout_buffer, dropped, self._model_version_value,
+                type(self).ahead_max_staleness)
 
     def start(self) -> None:
         # re-resolve: a loop class installed after this worker was built still gets composed
@@ -502,6 +614,29 @@ class ConcurrentScoreWorker(_arw.AsyncRolloutWorker):
         print(f"[rlforge][score] spawning rollout child with loop class {self._loop_cls.__qualname__} "
               f"(base installed: {_arw.AsyncRolloutWorker._loop_cls.__qualname__})", flush=True)
         return super().start()
+
+
+class _AheadQueue:
+    """Return stale credits only; accepted samples earn credits at the optimizer boundary."""
+
+    def __init__(self, queue, dropped, version, max_staleness):
+        self._queue = queue
+        self._dropped = dropped
+        self._version = version
+        self._max_staleness = max_staleness
+
+    def get(self, *args, **kwargs):
+        sample = self._queue.get(*args, **kwargs)
+        if self._version.value - sample.model_version > self._max_staleness:
+            with self._dropped.get_lock():
+                self._dropped.value += 1
+        return sample
+
+    def put_nowait(self, sample):
+        return self._queue.put_nowait(sample)
+
+    def qsize(self):
+        return self._queue.qsize()
 
 
 # --------------------------------------------------------------------------- trainer side
@@ -576,12 +711,25 @@ JUDGED_AUTO_EXTRA = 2  # auto cap = max_staleness + 2 (covers a 90 s judge wait 
 
 def install(score_concurrency: int = 0, judged_max_staleness: int | str | None = "auto",
             early_hooks: bool = False, max_staleness: int | None = None,
-            score_task_max_s: float | None = None) -> bool:
+            score_task_max_s: float | None = None, ahead_batch_samples: int = 0,
+            ahead_batches: int = 1) -> bool:
     """Patch TRL's async GRPO trainer module to use the classes above. Returns True if anything
     was installed. score_concurrency=0 and no other option = no-op (stock TRL).
 
     judged_max_staleness: "auto" (default) = max_staleness + 2 when score_concurrency > 1, else
     off; None = off; an int S = cap on the judged compensation, must be > max_staleness."""
+    if ahead_batch_samples:
+        if ahead_batch_samples < 0 or max_staleness is None:
+            raise ValueError("ahead gate needs positive batch samples and explicit max_staleness")
+        k = int(ahead_batches)
+        if k < 1 or (k > 1 and k >= int(max_staleness)):
+            # a group admitted K batches early is trained at staleness ~K; one batch of tail delay must stay <= cap.
+            # K=1 keeps its original contract (no extra constraint).
+            raise ValueError(f"ahead_batches={ahead_batches}: need K=1, or 1 < K < max_staleness={max_staleness}")
+        if judged_max_staleness not in (None, "auto"):
+            raise ValueError("ahead gate requires a strict staleness cap; disable judge allowance")
+        judged_max_staleness = None
+        JudgedStalenessRolloutQueueDataset.judged_max_staleness = None
     if judged_max_staleness == "auto":
         judged_max_staleness = (int(max_staleness) + JUDGED_AUTO_EXTRA
                                 if score_concurrency > 1 and max_staleness is not None else None)
@@ -592,7 +740,7 @@ def install(score_concurrency: int = 0, judged_max_staleness: int | str | None =
             raise ValueError(f"judged_max_staleness={judged_max_staleness} must be > max_staleness={max_staleness} "
                              "(it is the cap on judged samples' extra staleness); use -1 to switch it off")
     tag = judged_max_staleness is not None
-    if score_concurrency <= 0 and not tag and not early_hooks:
+    if score_concurrency <= 0 and not tag and not early_hooks and not ahead_batch_samples:
         return False
     bad = check_trl()
     if bad:
@@ -608,11 +756,14 @@ def install(score_concurrency: int = 0, judged_max_staleness: int | str | None =
         print("[rlforge] WARNING --reward-early-hooks is experimental: under judge saturation it favours the "
               "rollouts that finish first (short CoTs); see NONBLOCKING_SCORING_2026-10-03.md", flush=True)
     ConcurrentScoreWorker.extra_loop_kwargs = {
+        "ahead_batch_samples": int(ahead_batch_samples),
+        "ahead_batches": int(ahead_batches),
         "score_concurrency": max(1, int(score_concurrency)),
         "tag_judged": tag,
         "early_hooks": bool(early_hooks),
         "score_task_max_s": float(score_task_max_s) if score_task_max_s else default_score_task_max_s(),
     }
+    ConcurrentScoreWorker.ahead_max_staleness = int(max_staleness or 0)
     _agt.AsyncRolloutWorker = ConcurrentScoreWorker
     if tag:
         JudgedStalenessRolloutQueueDataset.judged_max_staleness = int(judged_max_staleness)

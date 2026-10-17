@@ -148,3 +148,21 @@ Options, in order of preference:
 3. If neither is available, treat ratio/clip metrics on hybrid models as
    biased-but-monotone signals and widen eps accordingly; do not read them as
    policy drift.
+
+## Continuing, curricula and A100 notes (2026-10-17, Qwen3.5-4B on A100)
+
+- `--lora` / `--lora-r` / `--lora-alpha` / `--lora-target-modules` are back in `rlforge.trainer` (the v3.2 merge had
+  dropped them). vLLM 0.30 serves LoRA on Qwen3.5 GatedDeltaNet projections through its packed mappings
+  (`in_proj_qkv`+`in_proj_z` -> `in_proj_qkvz`, `in_proj_a`+`in_proj_b` -> `in_proj_ba`), so all 12 projection
+  kinds can be targeted; train/rollout |log rho| stayed at 5-7e-4 over 100+ updates.
+- `--init-adapter DIR` loads a weights-only LoRA checkpoint (`adapter_model.safetensors`) before the first policy
+  sync, and `--dataset-start-index N` rotates the unshuffled prompt list so the stream continues at the
+  checkpoint's `rollout_state.json` `prompt_index`. Adam restarts (checkpoints are weights-only) with the usual
+  warmup.
+- The PEFT-wrapped VLM (`Qwen3_5ForConditionalGeneration`) needs `prefix_share._backbone` to unwrap the adapter
+  before reaching `model.language_model`.
+- Pre-Hopper GPUs: TRL hardcodes the Hopper-only flash-attn3 kernel; the trainer swaps to `flash_attention_2` when the
+  `flash_attn` package is importable and to `sdpa` otherwise. Build flash-attn for sm80 with
+  `FLASH_ATTN_CUDA_ARCHS=80 pip wheel flash-attn==2.8.3 --no-build-isolation` (about 6 min with MAX_JOBS=96).
+- Group-size curriculum: see `rlforge/curriculum.py`; the chain is run by
+  `production/a100_lora_gspo_20261017/resume_watch.py` (`CURRICULUM=8:60,16:60,32:0` in `make_plan.py`).

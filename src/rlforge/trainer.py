@@ -743,17 +743,70 @@ def _patch_attention_for_old_gpus() -> None:
     flash_attention_2 when the local device is pre-Hopper. No-op on H100/H200."""
     if not torch.cuda.is_available() or torch.cuda.get_device_capability(0)[0] >= 9:
         return
+    import importlib.util
     import trl.experimental.async_grpo.async_grpo_trainer as agt
 
+    # [q35-4b-a100] flash_attention_2 needs the flash_attn package; the A100 venv has none, so use sdpa.
+    _old_gpu_attn = "flash_attention_2" if importlib.util.find_spec("flash_attn") else "sdpa"
     orig = agt.create_model_from_path
 
     def with_fa2(*a, **kw):
         if kw.get("attn_implementation") == "kernels-community/flash-attn3":
-            kw["attn_implementation"] = "flash_attention_2"
+            kw["attn_implementation"] = _old_gpu_attn
         return orig(*a, **kw)
 
     agt.create_model_from_path = with_fa2
-    print("[rlforge] pre-Hopper GPU detected: attention implementation -> flash_attention_2")
+    print(f"[rlforge] pre-Hopper GPU detected: attention implementation -> {_old_gpu_attn}")
+
+
+def _fix_checkpoint_prompt_index(trainer):
+    """Record where the prompt stream actually stands when groups are dropped before the trainer.
+
+    TRL writes `rollout_state.json` with `prompt_index = dataset_start_index + first group id not in
+    _trained_groups`. With RLFORGE_DROP_ZERO_VAR=1 a dropped group is never trained, so the first dropped
+    id caps the recorded index for the rest of the run: the A100 4B r7 checkpoint-10 recorded 14 after
+    2560 groups. A resume would then replay nearly the whole run. Groups are admitted in order, so the
+    stream really stands just past the highest group the trainer has seen.
+    """
+    inner = trainer._save_checkpoint
+
+    def _save_checkpoint(model, trial):
+        inner(model, trial)
+        trained = getattr(trainer, "_trained_groups", None)
+        if not trainer.accelerator.is_main_process or not trained:
+            return
+        path = os.path.join(trainer._get_output_dir(trial=trial),
+                            f"checkpoint-{trainer.state.global_step}", "rollout_state.json")
+        if not os.path.isfile(path):
+            return
+        with open(path) as f:
+            state = json.load(f)
+        start = trainer.rollout_worker._loop_kwargs["dataset_start_index"]
+        state["prompt_index"] = start + max(trained) + 1
+        state["groups_trained"] = len(trained)
+        with open(path, "w") as f:
+            json.dump(state, f)
+
+    trainer._save_checkpoint = _save_checkpoint
+
+
+def _patch_mfu_peak() -> None:
+    """TRL's compute_mfu divides by an H100 SXM peak (989.5 TF bf16) on every GPU, which understates MFU 3.17x on
+    A100 (312 TF). Use the local device's dense bf16 peak instead (env RLFORGE_PEAK_TFLOPS overrides)."""
+    if not torch.cuda.is_available():
+        return
+    import trl.experimental.async_grpo.async_grpo_trainer as agt
+
+    major, minor = torch.cuda.get_device_capability(0)
+    peak = float(os.environ.get("RLFORGE_PEAK_TFLOPS", 0)) * 1e12 or {
+        (8, 0): 312e12, (8, 6): 71e12, (8, 9): 165e12, (9, 0): 989.5e12}.get((major, minor), 989.5e12)
+    orig = agt.compute_mfu
+
+    def compute_mfu(flops_per_token, tokens_per_second, world_size, peak_flops_per_device=None):
+        return orig(flops_per_token, tokens_per_second, world_size, peak_flops_per_device or peak)
+
+    agt.compute_mfu = compute_mfu
+    print(f"[rlforge] MFU peak per device: {peak / 1e12:.1f} TFLOP/s (sm{major}{minor})", flush=True)
 
 
 def main():
@@ -773,6 +826,10 @@ def main():
                     help="int64 rollout token metadata on the supported TRL collator; fail on source mismatch")
     ap.add_argument("--max-completion", type=int, default=16384)
     ap.add_argument("--max-staleness", type=int, default=4)
+    ap.add_argument("--rollout-ahead-batches", type=int, choices=[1, 2, 3], default=None,
+                    help="Cap proactive work at the current optimizer batch plus K future batches; "
+                         "includes generation, scoring and queued samples, with strict max-staleness "
+                         "(K must be below --max-staleness).")
     ap.add_argument("--max-inflight-tasks", type=int, default=128)
     ap.add_argument("--save-steps", type=int, default=50)
     ap.add_argument("--server-url", default="http://localhost:8000")
@@ -898,7 +955,23 @@ def main():
                     help="fail the rollout worker if one group's reward scoring takes longer than this "
                          "(hung reward/judge; TRL's check_health then stops the run). Default: env "
                          "RLFORGE_SCORE_TASK_MAX_S, else max(600, 3 x AIQ_HALLUC_TIMEOUT_S).")
+    # [q35-4b-a100] LoRA / PEFT adapter training, ported from poor-rl f9e019a (see docs/LORA.md)
+    ap.add_argument("--lora", action="store_true")
+    ap.add_argument("--lora-r", type=int, default=16)
+    ap.add_argument("--lora-alpha", type=int, default=0, help="0 = 2 x r")
+    ap.add_argument("--lora-dropout", type=float, default=0.0)
+    ap.add_argument("--lora-target-modules",
+                    default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj")
+    # [q35-4b-a100] continue a LoRA run from a weights-only checkpoint (no optimizer.pt): load the adapter before
+    # the first policy sync and continue the (unshuffled) prompt stream at the checkpoint's rollout_state prompt_index.
+    ap.add_argument("--init-adapter", default=None, help="PEFT dir whose adapter_model.safetensors initialises the adapter")
+    ap.add_argument("--dataset-start-index", type=int, default=0, help="rotate the prompt list to start at this row")
     args = ap.parse_args()
+    lora_targets = [t.strip() for t in args.lora_target_modules.split(",") if t.strip()]
+    if args.lora:
+        hit = sorted(set(lora_targets) & {"lm_head", "wte", "embed_tokens", "output", "score"})
+        if hit or not lora_targets:
+            ap.error(f"bad --lora-target-modules {lora_targets}: head/embeddings are not allowed")
     pdb = args.num_generations if args.microbatch_per_rank is None else args.microbatch_per_rank
     if args.num_generations <= 0 or pdb <= 0 or args.completions_per_step <= 0:
         ap.error("generation count, microbatch and completions per step must be positive")
@@ -913,7 +986,7 @@ def main():
     if args.fp8_align != "off" and args.fp8 != "native":
         raise SystemExit("--fp8-align vllm requires --fp8 native")
 
-    if (args.score_concurrency > 0 or args.reward_early_hooks
+    if (args.rollout_ahead_batches or args.score_concurrency > 0 or args.reward_early_hooks
             or (args.judged_max_staleness is not None and args.judged_max_staleness >= 0)):
         from rlforge.score_loop import install as _install_score_loop
         if args.judged_max_staleness is None:
@@ -926,6 +999,9 @@ def main():
             early_hooks=args.reward_early_hooks,
             max_staleness=args.max_staleness,
             score_task_max_s=args.score_task_max_s,
+            ahead_batch_samples=(args.completions_per_step * int(os.environ.get("WORLD_SIZE", "1"))
+                                 if args.rollout_ahead_batches else 0),
+            ahead_batches=args.rollout_ahead_batches or 1,
         )
 
     if args.allow_tf32:
@@ -936,12 +1012,17 @@ def main():
         _apply_liger_base_kernels(args.model)
 
     _patch_attention_for_old_gpus()
+    _patch_mfu_peak()
     if os.environ.get("RLFORGE_FUSED_OPS"):
         # [v3_2] fused conv / norm / SwiGLU for Qwen3.5 (rlforge.fused_ops); trainer side only
         from rlforge.fused_ops import install as _install_fused
         _install_fused()
 
     rows = [json.loads(line) for line in open(args.train)]
+    if args.dataset_start_index:
+        k = args.dataset_start_index % len(rows)
+        rows = rows[k:] + rows[:k]
+        print(f"[rlforge] dataset rotated to start at row {k} of {len(rows)}", flush=True)
     ds = Dataset.from_list(rows)
 
     report_to = [] if args.report_to in ("none", "") else args.report_to.split(",")
@@ -1061,6 +1142,15 @@ def main():
         trainer_kwargs["prefix_share"] = args.prefix_share == "on"
         trainer_kwargs["subbatch_tokens"] = args.subbatch_tokens
         trainer_kwargs["sb_ckpt"] = args.sb_ckpt
+    if args.lora:
+        from peft import LoraConfig
+
+        lora_alpha = args.lora_alpha or 2 * args.lora_r
+        trainer_kwargs["peft_config"] = LoraConfig(
+            r=args.lora_r, lora_alpha=lora_alpha, lora_dropout=args.lora_dropout,
+            target_modules=lora_targets, bias="none", task_type="CAUSAL_LM")
+        print(f"[rlforge] LoRA: r={args.lora_r} alpha={lora_alpha} dropout={args.lora_dropout} "
+              f"targets={lora_targets} (base dtype={args.dtype})", flush=True)
     trainer = trainer_cls(
         model=args.model,
         reward_funcs=partial(load_reward_fn(args.reward), cap=args.max_completion),
@@ -1068,6 +1158,23 @@ def main():
         train_dataset=ds,
         **trainer_kwargs,
     )
+    if args.init_adapter:
+        from peft import set_peft_model_state_dict
+        from safetensors.torch import load_file
+
+        assert args.lora, "--init-adapter requires --lora"
+        policy = trainer.accelerator.unwrap_model(trainer.model)
+        sd = load_file(os.path.join(args.init_adapter, "adapter_model.safetensors"))
+        res = set_peft_model_state_dict(policy, sd)
+        bad = list(getattr(res, "unexpected_keys", []) or []) + [k for k in (getattr(res, "missing_keys", []) or []) if "lora_" in k]
+        assert not bad, f"init adapter key mismatch: {bad[:5]}"
+        n = sum(1 for k, v in policy.named_parameters() if "lora_" in k)
+        print(f"[rlforge] init adapter loaded from {args.init_adapter}: {len(sd)} tensors -> {n} lora params", flush=True)
+    if os.environ.get("RLFORGE_DROP_ZERO_VAR") == "1":
+        _fix_checkpoint_prompt_index(trainer)
+    if args.rollout_ahead_batches:
+        from rlforge.stream_dispatch import install as install_stream_dispatch
+        install_stream_dispatch(trainer)
     if args.fp8 == "native":
         from rlforge.fp8 import install as install_fp8
         trainer._native_fp8 = True
