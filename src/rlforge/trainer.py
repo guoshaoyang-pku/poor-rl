@@ -743,17 +743,20 @@ def _patch_attention_for_old_gpus() -> None:
     flash_attention_2 when the local device is pre-Hopper. No-op on H100/H200."""
     if not torch.cuda.is_available() or torch.cuda.get_device_capability(0)[0] >= 9:
         return
+    import importlib.util
     import trl.experimental.async_grpo.async_grpo_trainer as agt
 
+    # [q35-4b-a100] flash_attention_2 needs the flash_attn package; the A100 venv has none, so use sdpa.
+    _old_gpu_attn = "flash_attention_2" if importlib.util.find_spec("flash_attn") else "sdpa"
     orig = agt.create_model_from_path
 
     def with_fa2(*a, **kw):
         if kw.get("attn_implementation") == "kernels-community/flash-attn3":
-            kw["attn_implementation"] = "flash_attention_2"
+            kw["attn_implementation"] = _old_gpu_attn
         return orig(*a, **kw)
 
     agt.create_model_from_path = with_fa2
-    print("[rlforge] pre-Hopper GPU detected: attention implementation -> flash_attention_2")
+    print(f"[rlforge] pre-Hopper GPU detected: attention implementation -> {_old_gpu_attn}")
 
 
 def main():
@@ -901,7 +904,23 @@ def main():
                     help="fail the rollout worker if one group's reward scoring takes longer than this "
                          "(hung reward/judge; TRL's check_health then stops the run). Default: env "
                          "RLFORGE_SCORE_TASK_MAX_S, else max(600, 3 x AIQ_HALLUC_TIMEOUT_S).")
+    # [q35-4b-a100] LoRA / PEFT adapter training, ported from poor-rl f9e019a (see docs/LORA.md)
+    ap.add_argument("--lora", action="store_true")
+    ap.add_argument("--lora-r", type=int, default=16)
+    ap.add_argument("--lora-alpha", type=int, default=0, help="0 = 2 x r")
+    ap.add_argument("--lora-dropout", type=float, default=0.0)
+    ap.add_argument("--lora-target-modules",
+                    default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj")
+    # [q35-4b-a100] continue a LoRA run from a weights-only checkpoint (no optimizer.pt): load the adapter before
+    # the first policy sync and continue the (unshuffled) prompt stream at the checkpoint's rollout_state prompt_index.
+    ap.add_argument("--init-adapter", default=None, help="PEFT dir whose adapter_model.safetensors initialises the adapter")
+    ap.add_argument("--dataset-start-index", type=int, default=0, help="rotate the prompt list to start at this row")
     args = ap.parse_args()
+    lora_targets = [t.strip() for t in args.lora_target_modules.split(",") if t.strip()]
+    if args.lora:
+        hit = sorted(set(lora_targets) & {"lm_head", "wte", "embed_tokens", "output", "score"})
+        if hit or not lora_targets:
+            ap.error(f"bad --lora-target-modules {lora_targets}: head/embeddings are not allowed")
     pdb = args.num_generations if args.microbatch_per_rank is None else args.microbatch_per_rank
     if args.num_generations <= 0 or pdb <= 0 or args.completions_per_step <= 0:
         ap.error("generation count, microbatch and completions per step must be positive")
@@ -947,6 +966,10 @@ def main():
         _install_fused()
 
     rows = [json.loads(line) for line in open(args.train)]
+    if args.dataset_start_index:
+        k = args.dataset_start_index % len(rows)
+        rows = rows[k:] + rows[:k]
+        print(f"[rlforge] dataset rotated to start at row {k} of {len(rows)}", flush=True)
     ds = Dataset.from_list(rows)
 
     report_to = [] if args.report_to in ("none", "") else args.report_to.split(",")
@@ -1066,6 +1089,15 @@ def main():
         trainer_kwargs["prefix_share"] = args.prefix_share == "on"
         trainer_kwargs["subbatch_tokens"] = args.subbatch_tokens
         trainer_kwargs["sb_ckpt"] = args.sb_ckpt
+    if args.lora:
+        from peft import LoraConfig
+
+        lora_alpha = args.lora_alpha or 2 * args.lora_r
+        trainer_kwargs["peft_config"] = LoraConfig(
+            r=args.lora_r, lora_alpha=lora_alpha, lora_dropout=args.lora_dropout,
+            target_modules=lora_targets, bias="none", task_type="CAUSAL_LM")
+        print(f"[rlforge] LoRA: r={args.lora_r} alpha={lora_alpha} dropout={args.lora_dropout} "
+              f"targets={lora_targets} (base dtype={args.dtype})", flush=True)
     trainer = trainer_cls(
         model=args.model,
         reward_funcs=partial(load_reward_fn(args.reward), cap=args.max_completion),
@@ -1073,6 +1105,18 @@ def main():
         train_dataset=ds,
         **trainer_kwargs,
     )
+    if args.init_adapter:
+        from peft import set_peft_model_state_dict
+        from safetensors.torch import load_file
+
+        assert args.lora, "--init-adapter requires --lora"
+        policy = trainer.accelerator.unwrap_model(trainer.model)
+        sd = load_file(os.path.join(args.init_adapter, "adapter_model.safetensors"))
+        res = set_peft_model_state_dict(policy, sd)
+        bad = list(getattr(res, "unexpected_keys", []) or []) + [k for k in (getattr(res, "missing_keys", []) or []) if "lora_" in k]
+        assert not bad, f"init adapter key mismatch: {bad[:5]}"
+        n = sum(1 for k, v in policy.named_parameters() if "lora_" in k)
+        print(f"[rlforge] init adapter loaded from {args.init_adapter}: {len(sd)} tensors -> {n} lora params", flush=True)
     if args.rollout_ahead_batches:
         from rlforge.stream_dispatch import install as install_stream_dispatch
         install_stream_dispatch(trainer)

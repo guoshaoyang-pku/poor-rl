@@ -197,6 +197,9 @@ def default_score_task_max_s() -> float:
     return max(600.0, 3.0 * judge_timeout)
 
 
+_DROP_ZERO_VAR = __import__("os").environ.get("RLFORGE_DROP_ZERO_VAR", "0") == "1"
+
+
 # --------------------------------------------------------------------------- rollout loop
 class ConcurrentScoreMixin:
     """Concurrent score loop; combine with an `_AsyncRolloutLoop` subclass (see module docstring).
@@ -210,6 +213,7 @@ class ConcurrentScoreMixin:
         self._ahead_batch_samples = int(ahead_batch_samples)
         self._ahead_dropped = self.rollout_buffer._dropped if ahead_batch_samples else None
         self._ahead_admitted = 0
+        self._zero_var_dropped = 0
         self._ahead_origin = None
         self._ahead_groups = {}
         self._ahead_next_group = 0
@@ -463,6 +467,19 @@ class ConcurrentScoreMixin:
                     num_samples=self.num_completions_to_print,
                 )
             self._total_groups_scored += 1
+
+            # [q35-4b-a100] RLFORGE_DROP_ZERO_VAR=1: a group whose advantages are all zero (every completion got the
+            # same reward) contributes no policy gradient, so it never reaches the trainer. Its samples are credited
+            # to the look-ahead gate's drop counter, which admits replacement groups: B stays B informative samples.
+            if _DROP_ZERO_VAR and samples and all(abs(s.advantage) < 1e-9 for s in samples):
+                self._zero_var_dropped += 1
+                if self._ahead_dropped is not None:
+                    with self._ahead_dropped.get_lock():
+                        self._ahead_dropped.value += len(samples)
+                self._push_metrics({"rollout/zero_var_dropped_groups_max": float(self._zero_var_dropped),
+                                    "rollout/zero_var_dropped_frac": self._zero_var_dropped / self._total_groups_scored})
+                self._t_idle_start = time.monotonic()
+                return
 
             for sample in samples:
                 t_blocked = None

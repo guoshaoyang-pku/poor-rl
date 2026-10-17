@@ -1,0 +1,111 @@
+{
+  "A": {
+    "about": "r1 rank-0 OOM -> r2; r2 trainer rc=1 with a hung node-1 worker the node watcher stops -> r3; r3 node-1 rank crash -> budget (2 per 6 h) used, blocked",
+    "r1": {
+      "rank0": "oom",
+      "fail_step": 25,
+      "worker": "follow"
+    },
+    "r2": {
+      "rank0": "rc1",
+      "fail_step": 25,
+      "worker": "hang"
+    },
+    "r3": {
+      "rank0": "run",
+      "worker": "exit",
+      "worker_exit_s": 5
+    },
+    "expect": {
+      "final": "blocked",
+      "node_final": "blocked",
+      "resumes": [
+        {
+          "to": "r2",
+          "ckpt": "r1/trainer_out/checkpoint-20",
+          "data_start": 1280,
+          "prior": 20
+        },
+        {
+          "to": "r3",
+          "ckpt": "r2/trainer_out/checkpoint-20",
+          "data_start": 2560,
+          "prior": 40
+        }
+      ],
+      "blocked": {
+        "run": "r3",
+        "reason": "resume budget used"
+      },
+      "stopped_worker": "r2"
+    }
+  },
+  "B": {
+    "about": "r1 OOM right after a save cut short (checkpoint-30 truncated) -> r2 from checkpoint-20; r2 completes -> done",
+    "r1": {
+      "rank0": "oom",
+      "fail_step": 25,
+      "partial_ckpt": true,
+      "worker": "follow"
+    },
+    "r2": {
+      "rank0": "done",
+      "fail_step": 25,
+      "worker": "follow"
+    },
+    "expect": {
+      "final": "done",
+      "node_final": "done",
+      "resumes": [
+        {
+          "to": "r2",
+          "ckpt": "r1/trainer_out/checkpoint-20",
+          "data_start": 1280,
+          "prior": 20,
+          "skipped": [
+            "checkpoint-30"
+          ]
+        }
+      ]
+    }
+  },
+  "C": {
+    "about": "operator stop (the head gets SIGTERM) -> not resumed, blocked",
+    "r1": {
+      "rank0": "sigterm_head",
+      "fail_step": 15,
+      "worker": "follow"
+    },
+    "expect": {
+      "final": "blocked",
+      "node_final": "blocked",
+      "resumes": [],
+      "blocked": {
+        "run": "r1",
+        "reason": "not an auto-resumable failure"
+      }
+    }
+  },
+  "D": {
+    "about": "curriculum CURRICULUM=8:20,16:20,32:0: r1 (G8) and r2 (G16) finish their stages -> stage advances (no failure budget); r3 (G32) completes -> done",
+    "r1": {
+      "rank0": "stage",
+      "worker": "follow"
+    },
+    "r2": {
+      "rank0": "stage",
+      "worker": "follow"
+    },
+    "r3": {
+      "rank0": "done",
+      "fail_step": 15,
+      "worker": "follow"
+    },
+    "expect": {
+      "final": "done",
+      "node_final": "done",
+      "resumes": [],
+      "stage_advances": 2
+    }
+  }
+}

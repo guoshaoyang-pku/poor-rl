@@ -84,6 +84,10 @@ def _unwrap(model):
 
 def _backbone(lm):
     """The text decoder stack (embed_tokens / layers / norm / rotary_emb) of a causal LM or a VLM."""
+    # [q35-4b-a100] a PEFT-wrapped policy: PeftModel.model is the LoraModel's wrapped *ForConditionalGeneration,
+    # so strip the adapter wrapper first (the injected LoRA layers stay live inside the base model).
+    if hasattr(lm, "get_base_model"):
+        lm = lm.get_base_model()
     inner = lm.model
     return getattr(inner, "language_model", inner)
 
