@@ -6,6 +6,13 @@ source /home/tione/guoshaoyang/a100_rl/env.sh
 IP=$(hostname -I | awk '{print $1}')
 RUN=$(python -c "import json,sys;print(json.load(open(sys.argv[1]))['run_dir'])" "$1")
 setsid nohup bash -c '
+  # wait until the head has launched its trainer (rank 0 hosts the rendezvous); the head may first wait a long
+  # time for rollout backends, longer than the c10d rendezvous timeout (r8, 2026-10-17)
+  for _ in $(seq 1 720); do
+    grep -q "\"name\": \"trainer\"" "$3/events.jsonl" 2>/dev/null && break
+    { [ -e "$3/FAILED.json" ] || [ -e "$3/DONE.json" ]; } && exit 0
+    sleep 5
+  done
   eval "$(python - "$1" "$2" <<PY
 import json, shlex, sys
 p = json.load(open(sys.argv[1]))

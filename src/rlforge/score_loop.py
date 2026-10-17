@@ -200,6 +200,7 @@ def default_score_task_max_s() -> float:
 
 
 _DROP_ZERO_VAR = __import__("os").environ.get("RLFORGE_DROP_ZERO_VAR", "0") == "1"
+_AHEAD_EXTRA_FRAC = float(__import__("os").environ.get("RLFORGE_AHEAD_EXTRA_FRAC", "0.15"))
 
 
 # --------------------------------------------------------------------------- rollout loop
@@ -215,6 +216,7 @@ class ConcurrentScoreMixin:
         super().__init__(**kwargs)
         self._ahead_batch_samples = int(ahead_batch_samples)
         self._ahead_batches = int(ahead_batches)  # K future batches admitted beyond the one being trained
+        self._ahead_extra_groups = 0  # groups admitted beyond the K=1 limit (budgeted, see _ahead_try_admit)
         self._ahead_dropped = self.rollout_buffer._dropped if ahead_batch_samples else None
         self._ahead_admitted = 0
         self._zero_var_dropped = 0
@@ -295,18 +297,32 @@ class ConcurrentScoreMixin:
         return result
 
     def _ahead_try_admit(self, group_id) -> bool:
-        limit = ((self.model_version - self._ahead_origin + 1 + self._ahead_batches) * self._ahead_batch_samples
-                 + self._ahead_dropped.value)
-        if (group_id == self._ahead_next_group
-                and self._ahead_admitted + self.num_generations <= limit):
-            self._ahead_admitted += self.num_generations
-            self._ahead_next_group += 1
-            self._ahead_groups[group_id] = self.model_version
-            waiter = self._ahead_waiters.pop(group_id, None)
-            if waiter is not None and not waiter.done():
-                waiter.set_result(None)
-            return True
-        return False
+        # Base rule (K=1): the batch being trained plus one future batch. With K>1, groups beyond that base limit
+        # (up to K future batches) are admitted only while they stay within a budget: at most
+        # RLFORGE_AHEAD_EXTRA_FRAC (default 0.15) of all admitted groups, counted at admission. Staleness that
+        # grows later because a group runs a long tail is not charged to this budget.
+        if group_id != self._ahead_next_group:
+            return False
+        span = self.model_version - self._ahead_origin
+        base = (span + 2) * self._ahead_batch_samples + self._ahead_dropped.value
+        full = (span + 1 + self._ahead_batches) * self._ahead_batch_samples + self._ahead_dropped.value
+        after = self._ahead_admitted + self.num_generations
+        extra = after > base
+        if after > full:
+            return False
+        if extra:
+            groups = self._ahead_admitted // self.num_generations + 1
+            used = getattr(self, '_ahead_extra_groups', 0)
+            if (used + 1) > _AHEAD_EXTRA_FRAC * groups:
+                return False
+            self._ahead_extra_groups = used + 1
+        self._ahead_admitted = after
+        self._ahead_next_group += 1
+        self._ahead_groups[group_id] = self.model_version
+        waiter = self._ahead_waiters.pop(group_id, None)
+        if waiter is not None and not waiter.done():
+            waiter.set_result(None)
+        return True
 
     async def _ahead_pump_loop(self) -> None:
         # model_version / dropped are shared mp.Values written by the trainer process, so the limit
@@ -481,6 +497,7 @@ class ConcurrentScoreMixin:
                     (self._ahead_admitted - dropped) / self._ahead_batch_samples
                     - (version - self._ahead_origin))
                 payload["rollout/ahead_batch_samples"] = float(self._ahead_batch_samples)
+                payload["rollout/ahead_extra_frac"] = getattr(self, '_ahead_extra_groups', 0) / max(1, self._ahead_admitted // self.num_generations)
             self._push_metrics(payload)
             self._pushed_completion_tokens = self._total_completion_tokens
             self._pushed_at = now

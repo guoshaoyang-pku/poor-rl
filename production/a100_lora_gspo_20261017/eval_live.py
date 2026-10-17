@@ -44,7 +44,8 @@ def post(path, body, timeout=600):
 
 def done_steps():
     try:
-        return {json.loads(l).get('step') for l in open(RUN / 'eval_live.jsonl') if '"step"' in l}
+        recs = [json.loads(l) for l in open(RUN / 'eval_live.jsonl') if '"step"' in l]
+        return {r['step'] for r in recs if r.get('status') in ('ok', 'incomplete')}  # errors are retried
     except OSError:
         return set()
 
@@ -105,7 +106,18 @@ def evaluate(step, path):
         f.write(json.dumps(summ) + '\n')
 
 
+def router_ready():
+    try:
+        with urllib.request.urlopen(ROUTER + '/server_info?config_format=json', timeout=30) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
 while not (RUN / 'FAILED.json').exists() and not (RUN / 'DONE.json').exists():
+    if not router_ready():
+        time.sleep(30)
+        continue
     seen = done_steps()
     todo = []
     if INIT and 0 not in seen and Path(INIT).exists():
