@@ -32,7 +32,7 @@ if CURRICULUM:
     _here = os.path.dirname(os.path.abspath(__file__))  # kit layout: ./src ; poor-rl layout: ../../src
     sys.path[:0] = [p for p in (os.path.join(_here, 'src'), os.path.join(_here, '..', '..', 'src')) if os.path.isdir(p)]
     from rlforge.curriculum import resolve
-    _c = resolve(CURRICULUM, STAGE, STAGE_DONE, batch=B, open_ended_steps=int(os.environ.get('MAX_STEPS', 2000)))
+    _c = resolve(CURRICULUM, STAGE, STAGE_DONE, batch=B, open_ended_steps=int(os.environ.get('OPEN_ENDED_STEPS', 2000)))  # not MAX_STEPS: the watcher passes the previous stage's
     NGEN, MAX_STEPS = _c['G'], str(_c['max_steps'])
 else:
     NGEN, MAX_STEPS = int(os.environ.get('NGEN', 32)), os.environ.get('MAX_STEPS', '2000')
