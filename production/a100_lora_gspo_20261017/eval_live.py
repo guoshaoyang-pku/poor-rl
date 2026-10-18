@@ -114,7 +114,16 @@ def router_ready():
         return False
 
 
-while not (RUN / 'FAILED.json').exists() and not (RUN / 'DONE.json').exists():
+def ended():
+    """FAILED/DONE written by the current head of RUN (a marker older than its start is ignored)."""
+    try:
+        t0 = datetime.datetime.fromisoformat(json.loads((RUN / 'state.json').read_text())['started_utc']).timestamp()
+    except Exception:  # noqa: BLE001
+        t0 = 0
+    return any((RUN / f).exists() and (RUN / f).stat().st_mtime >= t0 - 5 for f in ('FAILED.json', 'DONE.json'))
+
+
+while not ended():
     if not router_ready():
         time.sleep(30)
         continue

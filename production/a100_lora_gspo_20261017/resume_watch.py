@@ -256,6 +256,20 @@ def derive(run, kit, advance=False):
                  'plan_check': f'equal to {run.name}/plan.json outside run_dir and the resume point'}
 
 
+def live(path, run):
+    """An end marker (FAILED / RESUME_BLOCKED) that belongs to the current head of RUN: written after that head
+    started. A marker left from an earlier head of the same run dir (renamed or not) must not end the watch: on
+    2026-10-17 a stale RESUME_BLOCKED.json made the r9 watcher exit at start, and the curriculum never advanced."""
+    if not path.exists():
+        return False
+    st = read_json(run / 'state.json') or {}
+    try:
+        t0 = datetime.datetime.fromisoformat(st['started_utc']).timestamp()
+    except (KeyError, ValueError, TypeError):
+        return True
+    return path.stat().st_mtime >= t0 - 5
+
+
 def has_next_stage(run):
     cur = (read_json(run / 'plan.json') or {}).get('curriculum')
     return bool(cur) and int(cur['stage']) + 1 < len(cur['schedule'].split(','))
@@ -403,9 +417,9 @@ class Head(Watcher):
                         run, missing = self.resume(run, {'reason': 'curriculum stage complete'}, advance=True), 0
                         continue
                     self.event('done', run=str(run)); self.beat(status='done', following=str(run)); return 0
-                if (run / 'RESUME_BLOCKED.json').exists():
+                if live(run / 'RESUME_BLOCKED.json', run):
                     self.beat(status='blocked', following=str(run)); return 2
-                failed = read_json(run / 'FAILED.json')
+                failed = read_json(run / 'FAILED.json') if live(run / 'FAILED.json', run) else None
                 if failed:
                     self.event('failed_seen', run=str(run), reason=str(failed.get('reason'))[:300])
                     run, missing = self.resume(run, failed), 0
@@ -441,7 +455,7 @@ class Node(Watcher):
                 stage_end = (run / 'DONE.json').exists() and has_next_stage(run)
                 if (run / 'DONE.json').exists() and not stage_end:
                     self.event('done', run=str(run)); self.beat(status='done', following=str(run)); return 0
-                end = stage_end or (run / 'FAILED.json').exists() or (run / 'RESUME_BLOCKED.json').exists()
+                end = stage_end or live(run / 'FAILED.json', run) or live(run / 'RESUME_BLOCKED.json', run)
                 ended = (ended or time.time()) if end else None
                 if end and own and not exitf.exists() and time.time() - ended > a.kill_after_s:
                     pids = owned(f'node:{run}')
@@ -457,7 +471,7 @@ class Node(Watcher):
                     self.event('worker_launched', run=str(nxt), pid=pid)
                     run, ended = nxt, None
                     continue
-                if (run / 'RESUME_BLOCKED.json').exists() and (exitf.exists() or not own):
+                if live(run / 'RESUME_BLOCKED.json', run) and (exitf.exists() or not own):
                     self.event('blocked', run=str(run)); self.beat(status='blocked', following=str(run)); return 2
                 self.beat(status='watching', following=str(run), worker_exited=exitf.exists(),
                           gpu_busy_mib=None if a.gpu_mib < 0 else gpu_busy_mib())
