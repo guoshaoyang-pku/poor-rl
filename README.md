@@ -50,6 +50,9 @@ on a single GPU node, fully offline.
 | ✅ | Watchdog for unattended runs | In-loop held-out eval, keep-best checkpoint copy, 5 auto-stop rules |
 | ✅ | LoRA / adapter training | `LORA=1`: bf16 frozen base + fp32 adapter, adapter-only policy sync (25.6 MB vs 1.75 GB, 0.12-0.19 s/step) ([`docs/LORA.md`](docs/LORA.md)) |
 | 🔶 | fp8 rollout weights | `ROLLOUT_QUANTIZATION=fp8` measured against a BF16 control with a fp32 LoRA adapter: sequence-level ratio deviation ~1-3%; long-run quality unproven |
+| ✅ | Multi-node A100 LoRA GSPO (4B) | 2-node DDP trainer over TCP + N TP1 vLLM backends behind `rlforge.rollout.router` with adapter-only push; supervisor, failure auto-resume and no-GPU drills ([`production/a100_lora_gspo_20261017/`](production/a100_lora_gspo_20261017/README.md)) |
+| ✅ | Group-size curriculum | `rlforge.curriculum`: `G:updates` or `G@epochs` stages (e.g. `8:60,16:60,32:0`), chained runs at fixed B and LR; stage advance driven by the resume watcher |
+| ✅ | Zero-variance group drop | `RLFORGE_DROP_ZERO_VAR=1`: groups whose advantages are all 0 never reach the trainer; replacements are admitted through the look-ahead gate, so every update keeps B informative completions |
 | 🗺️ | FSDP path for >3B | Validated single-node config in `examples/accelerate/`; LoRA arms stay on DDP |
 | **Panel** | | |
 | ✅ | Experiment tracking & panels | SwanLab local mode by default, unified local Home, RL-specific auto HTML report |
