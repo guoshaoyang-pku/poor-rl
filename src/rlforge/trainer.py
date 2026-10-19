@@ -220,6 +220,19 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
 
     def _log_step_metrics(self):
         step = int(self.state.global_step)
+        if _RANK_TIMING:
+            try:
+                path = _RANK_TIMING.replace("{rank}", str(int(self.accelerator.process_index)))
+                os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+                with open(path, "a") as f:
+                    f.write(json.dumps({"step": step, "rank": int(self.accelerator.process_index),
+                                        "own_s": round(getattr(self, "_rt_s", 0.0), 3),
+                                        "tokens": int(getattr(self, "_rt_tok", 0)),
+                                        "microbatches": int(getattr(self, "_rt_mb", 0)),
+                                        "local_seqs": int(self._audit_local_seqs)}) + "\n")
+            except OSError as e:
+                print(f"[rlforge] rank timing write failed: {e}", flush=True)
+            self._rt_s, self._rt_tok, self._rt_mb = 0.0, 0, 0
         if step <= self._mb_audit_steps or step % 50 == 0:
             print(f"[rlforge][mb_audit] rank={self.accelerator.process_index} step={step} "
                   f"microbatches={self._step_microbatches} local_seqs={self._audit_local_seqs} "
@@ -247,7 +260,19 @@ class GSPOAsyncGRPOTrainer(AsyncGRPOTrainer):
         self, model, inputs, return_outputs=False, num_items_in_batch=None
     ):
         if self._sb_tokens:
-            return self._compute_loss_subbatched(model, inputs)
+            if not _RANK_TIMING:
+                return self._compute_loss_subbatched(model, inputs)
+            # [q35-4b-a100] per-rank own-work timing: forwards + in-call backwards of this micro-batch. The last
+            # sub-batch's backward (the one carrying the DDP all-reduce) runs outside compute_loss, so waiting for
+            # other ranks is not counted. Synchronized on both ends.
+            torch.cuda.synchronize()
+            t0 = time.perf_counter()
+            out = self._compute_loss_subbatched(model, inputs)
+            torch.cuda.synchronize()
+            self._rt_s = getattr(self, '_rt_s', 0.0) + time.perf_counter() - t0
+            self._rt_tok = getattr(self, '_rt_tok', 0) + int(inputs["attention_mask"].sum())
+            self._rt_mb = getattr(self, '_rt_mb', 0) + 1
+            return out
         mask_bool = inputs["attention_mask"].bool()
         input_ids = inputs["input_ids"][mask_bool].unsqueeze(0)
         completion_mask = inputs["completion_mask"][mask_bool].unsqueeze(0)
@@ -788,6 +813,9 @@ def _fix_checkpoint_prompt_index(trainer):
             json.dump(state, f)
 
     trainer._save_checkpoint = _save_checkpoint
+
+
+_RANK_TIMING = os.environ.get("RLFORGE_RANK_TIMING_PATH", "")  # jsonl, one line per rank per optimizer step
 
 
 def _patch_mfu_peak() -> None:

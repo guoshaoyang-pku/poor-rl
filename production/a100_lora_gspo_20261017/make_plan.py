@@ -88,6 +88,7 @@ plan = {
             'RLFORGE_TASK_LOG': f'{RUN}/task_split.jsonl', 'AIQ_SAMPLE_LOG': f'{RUN}/rollout_samples.jsonl',
             'RLFORGE_DROP_AUDIT_PATH': f'{RUN}/drop_audit.jsonl',
             'RLFORGE_DROP_ZERO_VAR': os.environ.get('DROP_ZERO_VAR', '1'),
+            'RLFORGE_RANK_TIMING_PATH': f'{RUN}/rank_timing/rank{{rank}}.jsonl',
             'NCCL_SOCKET_IFNAME': 'eth0', 'GLOO_SOCKET_IFNAME': 'eth0', 'NCCL_IB_DISABLE': '1'},
     'trainer_env': {'CUDA_VISIBLE_DEVICES': '0,1,2,3,4,5,6,7',
                     'ACCELERATE_MIXED_PRECISION': 'bf16'},
